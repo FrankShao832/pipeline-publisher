@@ -1,0 +1,347 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+PIPFILE.lock
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Translations
+*.mo
+*.pot
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+env.local
+venv.local
+ENV.local
+ENV.bak/
+venv.bak/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# IDE - PyCharm/IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+.idea_modules/
+
+# IDE - VSCode
+.vscode/
+*.code-workspace
+.history/
+
+# IDE - Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# IDE - Atom
+.atom/
+
+# IDE - Eclipse
+.project
+.classpath
+.settings/
+
+# IDE - NetBeans
+nbproject/
+build/
+nbbuild/
+dist/
+nbdist/
+.nb-gradle/
+
+# IDE - Vim
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+[._]s[a-rt-v][a-z]
+[._]ss[a-gi-z]
+[._]sw[a-p]
+Session.vim
+Sessionx.vim
+.netrwhist
+*~
+tags
+TAGS
+
+# IDE - Emacs
+\#*\#
+.\#*
+.dir-locals.el
+auto-save-list
+tramp
+
+# Mac OS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# Project specific
+*.log
+*.log.*
+logs/
+*.tmp
+*.temp
+temp/
+tmp/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+*.mdb
+*.accdb
+
+# Backup files
+*.bak
+*.backup
+*~
+*.old
+
+# Archives
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# RStudio
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+
+# Node.js (if any frontend components)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn-integrity
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Configuration files with sensitive data
+config/local.yaml
+config/production.yaml
+.secrets
+*.secret
+.env.local
+.env.production
+
+# Pipeline specific
+publish/
+render/
+output/
+cache/
+temp_files/
+*.render
+*.render.*
+
+# Maya
+*.swatch
+mel/
+scripts/userSetup.py
+
+# Nuke
+*.nk.bak
+*.nk.tmp
+
+# Houdini
+*.hip.bak
+*.hipnc.bak
+
+# Application specific
+*.pid
+*.lock
+.lock
+
+# Docker
+docker-compose.override.yml
+
+# Kubernetes
+*.kubeconfig
+kubectl/
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+
+# Ansible
+*.retry
+ansible/hosts
+
+# Documentation
+docs/_build/
+docs/.doctrees/
+
+# Large files
+*.iso
+*.dmg
+*.pkg
+*.exe
+*.msi
+
+# Temporary and cache directories
+.cache/
+*.cache
+node_modules/
+bower_components/
+
+# Compilation and debugging files
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.pyc
+*.pyd
+*.pyo
+
+# Project build artifacts
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+
+# Virtual environment wrappers
+*.virtualenv
+.virtualenv/
+
+# Coverage
+htmlcov/
+.coverage
+.coverage.*
+.coverage.*.html
+.coverage.*.xml
+.coverage.*.json
+.coverage.*.html
+.pytest_cache/
+
+# Performance profiling
+*.prof
+*.cprofile
+*.profile
+
+# Security
+*.pem
+*.key
+*.crt
+*.csr
+*.p12
+*.pfx
+
+# Custom project files
+user_data/
+user_settings/
+local_settings/
