@@ -74,6 +74,7 @@ class MainWindow(QMainWindow):
         self.status_display = QLabel("Ready for testing")
         self.status_display.setAlignment(Qt.AlignCenter)
         self.status_display.setFixedHeight(30)
+        self.status_display.setObjectName("status_display")
         main_layout.addWidget(self.status_display)
         
         # Log display
@@ -148,12 +149,30 @@ class MainWindow(QMainWindow):
                 color: #888888;
             }
             
+            /* Test control buttons - gray style */
+            QPushButton#test_button {
+                background-color: #4a4a4a;
+                color: #ffffff;
+                border: 1px solid #555555;
+            }
+            
+            QPushButton#test_button:hover {
+                background-color: #5a5a5a;
+                border-color: #666666;
+            }
+            
+            QPushButton#test_button:pressed {
+                background-color: #3a3a3a;
+                border-color: #444444;
+            }
+            
             QLabel#status_display {
-                background-color: #2b2b2b;
-                border: 1px solid #444444;
+                background-color: #3a3a3a;
+                border: 1px solid #4a4a4a;
                 border-radius: 4px;
                 padding: 6px;
                 font-size: 10pt;
+                color: #cccccc;
             }
             
             QFrame#controls_frame {
@@ -198,10 +217,12 @@ class MainWindow(QMainWindow):
         button_layout_1 = QHBoxLayout()
         
         refresh_btn = QPushButton("🔄 Refresh Context")
+        refresh_btn.setObjectName("test_button")
         refresh_btn.clicked.connect(self.refresh_context)
         button_layout_1.addWidget(refresh_btn)
         
         validate_btn = QPushButton("✓ Validate Context")
+        validate_btn.setObjectName("test_button")
         validate_btn.clicked.connect(self.validate_context)
         button_layout_1.addWidget(validate_btn)
         
@@ -211,10 +232,12 @@ class MainWindow(QMainWindow):
         button_layout_2 = QHBoxLayout()
         
         test_env_btn = QPushButton("🧪 Test Environment")
+        test_env_btn.setObjectName("test_button")
         test_env_btn.clicked.connect(self.test_environment)
         button_layout_2.addWidget(test_env_btn)
         
         show_data_btn = QPushButton("📋 Show Context Data")
+        show_data_btn.setObjectName("test_button")
         show_data_btn.clicked.connect(self.show_context_data)
         button_layout_2.addWidget(show_data_btn)
         
@@ -224,10 +247,12 @@ class MainWindow(QMainWindow):
         button_layout_3 = QHBoxLayout()
         
         set_env_btn = QPushButton("⚙️ Set Test Environment")
+        set_env_btn.setObjectName("test_button")
         set_env_btn.clicked.connect(self.set_test_environment)
         button_layout_3.addWidget(set_env_btn)
         
         clear_env_btn = QPushButton("🗑️ Clear Environment")
+        clear_env_btn.setObjectName("test_button")
         clear_env_btn.clicked.connect(self.clear_environment)
         button_layout_3.addWidget(clear_env_btn)
         
@@ -381,18 +406,22 @@ Environment Test Results:
             'success': '#4caf50',
             'error': '#f44336',
             'warning': '#ff9800',
-            'info': '#2196f3'
+            'info': '#2196f3',
+            'default': '#666666'  # Gray for regular status
         }
         
         color = color_map.get(status_type, '#666666')
         self.status_display.setText(message)
         self.status_display.setStyleSheet(f"""
-            background-color: #2b2b2b;
-            border: 1px solid {color};
-            border-radius: 4px;
-            padding: 6px;
-            font-size: 10pt;
-            color: {color};
+            QLabel#status_display {{
+                background-color: #3a3a3a;
+                border: 1px solid {color};
+                border-radius: 4px;
+                padding: 6px;
+                font-size: 10pt;
+                color: {color};
+                font-weight: normal;
+            }}
         """)
     
     def log_message(self, message: str, log_type: str = "info"):
