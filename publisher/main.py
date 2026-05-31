@@ -5,12 +5,17 @@ Supports multiple modes:
 - Standalone mode: python -m publisher.main
 - DCC integration: import publisher.main; publisher.main.launch()
 - Programmatic usage: Flexible API for various use cases
+
+Design: This module is a thin coordinator that delegates to specialized modules:
+  - DCC detection  -> publisher.dcc.dcc_detector
+  - Version info   -> publisher.core.version
+  - UI icon/utils  -> publisher.ui.ui_utils
+  - DCC launchers  -> publisher.dcc.launcher
 """
 
 import sys
-import os
 from pathlib import Path
-from typing import Optional, Tuple, Any
+from typing import Optional, Tuple
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
@@ -18,136 +23,84 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import QTimer, Signal, QObject
-import PySide6
+from PySide6.QtCore import QObject, Signal
 
 from publisher.ui.main_window import MainWindow
 from publisher.dcc.dcc_detector import DCCDetector, DCCType
-
-# Version information
-__version__ = "2.0.0"
-__author__ = "Frank"
+from publisher.core.version import get_version_info
+from publisher.ui.ui_utils import get_app_icon
 
 
 class PublisherLauncher(QObject):
     """
-    Publisher launcher for managing application lifecycle.
+    Publisher application lifecycle manager.
     
-    Handles window creation, event loop management, and cleanup.
-    Provides a clean interface for both standalone and DCC-integrated usage.
+    Responsibilities:
+    - Create/manage QApplication instance
+    - Create publisher window
+    - Manage application event loop
+    - Cleanup resources
+    
+    Delegates to:
+    - DCCDetector for environment detection
+    - MainWindow for UI
+    - version module for version info
     """
     
     # Signals for lifecycle events
-    window_created = Signal(object)  # Emitted when window is created
-    application_ready = Signal()   # Emitted when app is ready
-    window_closed = Signal()        # Emitted when window is closed
+    window_created = Signal(object)
+    application_ready = Signal()
+    window_closed = Signal()
     
     def __init__(self, standalone_mode: bool = True, parent: Optional[QObject] = None):
         """Initialize publisher launcher."""
         super().__init__(parent)
         
         self.standalone_mode = standalone_mode
-        self.application = None
-        self.window = None
+        self.application: Optional[QApplication] = None
+        self.window: Optional[MainWindow] = None
         self.is_running = False
-    
-    def detect_environment(self) -> str:
-        """Detect current runtime environment."""
-        try:
-            import maya.cmds as cmds
-            return "maya"
-        except ImportError:
-            pass
-        
-        try:
-            import hou
-            return "houdini"
-        except ImportError:
-            pass
-        
-        try:
-            import nuke
-            return "nuke"
-        except ImportError:
-            pass
-        
-        return "standalone"
     
     def create_application(self) -> QApplication:
         """Create or get existing QApplication instance."""
         existing_app = QApplication.instance()
-        
         if existing_app:
             return existing_app
         
         app = QApplication(sys.argv)
-        app.setApplicationName("Pipeline Publisher")
-        app.setApplicationVersion("1.0.0")
-        app.setOrganizationName("Pipeline Team")
-        
-        # Set dark theme style
+        app.setApplicationName("Y Publisher")
+        app.setApplicationVersion("2.0.0")
+        app.setOrganizationName("Frank")
         app.setStyle('Fusion')
         
-        # Configure application
-        self._configure_application(app)
-        
-        return app
-    
-    def _configure_application(self, app: QApplication):
-        """Configure application settings."""
-        # For Qt6, high DPI scaling is enabled by default
-        # No need for manual configuration anymore
-        
-        # Set application metadata
+        # Set window icon
         try:
-            app.setWindowIcon(self._get_app_icon())
+            app.setWindowIcon(get_app_icon())
         except Exception:
             pass  # Icon is optional
-    
-    def _get_app_icon(self):
-        """Get application icon."""
-        from PySide6.QtGui import QIcon
-        icon_path = Path(__file__).parent / "ui" / "imgs" / "app_icon.png"
-        if icon_path.exists():
-            return QIcon(str(icon_path))
-        return QIcon()
-    
-    def _get_qt_version(self) -> str:
-        """Get Qt version."""
-        try:
-            from PySide6.QtCore import QT_VERSION_STR
-            return QT_VERSION_STR
-        except ImportError:
-            return "unknown"
-    
-    def _get_pyside6_version(self) -> str:
-        """Get PySide6 version."""
-        try:
-            import PySide6
-            return PySide6.__version__
-        except (ImportError, AttributeError):
-            return "unknown"
+        
+        return app
     
     def create_window(self) -> MainWindow:
         """Create main window instance."""
         window = MainWindow(standalone_mode=self.standalone_mode)
-        window.setWindowTitle(f"Pipeline Publisher v1.0.0")
+        window.setWindowTitle("Y Publisher V 2.0.0")
         
-        # Connect window signals
+        # Connect window ready signal
         if hasattr(window, 'window_ready'):
             window.window_ready.connect(self._on_window_ready)
         
         # Handle window close
-        window.closeEvent = self._create_close_handler(window.closeEvent)
+        original_close = window.closeEvent
         
-        return window
-    
-    def _create_close_handler(self, original_close_event):
-        """Create custom close event handler."""
         def close_handler(event):
             self.window_closed.emit()
-            original_close_event(event)
-        return close_handler
+            if original_close:
+                original_close(event)
+        
+        window.closeEvent = close_handler
+        
+        return window
     
     def _on_window_ready(self):
         """Handle window ready signal."""
@@ -163,12 +116,10 @@ class PublisherLauncher(QObject):
         Returns:
             Tuple of (application, window). Application may be None in DCC mode.
         """
-        # Detect environment
-        environment = self.detect_environment()
-        
-        # Auto-detect mode if not explicitly set
-        if environment != "standalone" and self.standalone_mode:
-            print(f"Detected {environment} environment, switching to DCC mode")
+        # Detect environment and auto-switch mode if needed
+        dcc_type = DCCDetector.detect()
+        if dcc_type != DCCType.STANDALONE and self.standalone_mode:
+            print(f"Detected {dcc_type.display_name} environment, switching to DCC mode")
             self.standalone_mode = False
         
         # Create application
@@ -176,19 +127,17 @@ class PublisherLauncher(QObject):
         
         # Create window
         self.window = self.create_window()
-        
-        # Emit signal
         self.window_created.emit(self.window)
+        
+        # Update window title with environment
+        env_label = "Standalone" if self.standalone_mode else dcc_type.display_name
+        self.window.setWindowTitle(f"Y Publisher - {env_label}")
         
         # Show window
         if show:
             self.window.show()
             self.window.raise_()
             self.window.activateWindow()
-        
-        # Update window title with environment
-        env_label = "Standalone" if self.standalone_mode else environment.upper()
-        self.window.setWindowTitle(f"Pipeline Publisher - {env_label}")
         
         self.is_running = True
         return (self.application, self.window)
@@ -207,36 +156,17 @@ class PublisherLauncher(QObject):
     
     def cleanup(self):
         """Clean up resources."""
-        if self.window:
-            if hasattr(self.window, 'cleanup'):
-                self.window.cleanup()
-        
+        if self.window and hasattr(self.window, 'cleanup'):
+            self.window.cleanup()
         self.is_running = False
     
-    def get_dcc_info(self) -> dict:
-        """Get detailed DCC information."""
-        from publisher.dcc.dcc_detector import DCCDetector, DCCType
-        
-        dcc_type = self._detect_dcc_type()
-        return DCCDetector.get_dcc_info(dcc_type)
-    
     def get_version_info(self) -> dict:
-        """Get version information."""
-        return {
-            'publisher_version': __version__,
-            'python_version': f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
-            'qt_version': self._get_qt_version(),
-            'pyside6_version': self._get_pyside6_version()
-        }
-    
-    def _detect_dcc_type(self):
-        """Detect current DCC type."""
-        from publisher.dcc.dcc_detector import DCCDetector, DCCType
-        return DCCDetector.detect()
+        """Get version information (delegated to version module)."""
+        return get_version_info()
 
 
 # Global launcher instance
-_launcher = None
+_launcher: Optional[PublisherLauncher] = None
 
 
 def launch(standalone_mode: Optional[bool] = None, show: bool = True) -> Tuple[Optional[QApplication], MainWindow]:
@@ -254,93 +184,35 @@ def launch(standalone_mode: Optional[bool] = None, show: bool = True) -> Tuple[O
         Tuple of (application, window). Application is None in DCC mode.
     
     Examples:
-        >>> # Standalone mode
         >>> app, window = launch()
         >>> app.exec()
         
-        >>> # DCC integration
         >>> _, window = launch(standalone_mode=False)
-        
-        >>> # With auto-detection
-        >>> _, window = launch()  # Auto-detects environment
     """
     global _launcher
     
-    # Detect environment if mode not specified
+    # Auto-detect mode if not specified
     if standalone_mode is None:
-        launcher = PublisherLauncher(standalone_mode=True)
-        environment = launcher.detect_environment()
-        standalone_mode = (environment == "standalone")
+        dcc_type = DCCDetector.detect()
+        standalone_mode = (dcc_type == DCCType.STANDALONE)
     
-    # Create launcher with determined mode
+    # Create and launch
     _launcher = PublisherLauncher(standalone_mode=standalone_mode)
-    
-    # Launch publisher
     return _launcher.launch(show=show)
 
 
 def launch_standalone(show: bool = True) -> Tuple[QApplication, MainWindow]:
-    """
-    Launch Publisher in standalone mode.
-    
-    Convenience function for explicit standalone mode launching.
-    
-    Args:
-        show: Whether to show the window immediately
-    
-    Returns:
-        Tuple of (application, window)
-    """
+    """Launch Publisher in explicit standalone mode."""
     return launch(standalone_mode=True, show=show)
 
 
 def launch_dcc(show: bool = True) -> Tuple[None, MainWindow]:
-    """
-    Launch Publisher in DCC mode.
-    
-    Convenience function for DCC-integrated launching.
-    
-    Args:
-        show: Whether to show the window immediately
-    
-    Returns:
-        Tuple of (None, window) - Application is None in DCC mode
-    """
+    """Launch Publisher in explicit DCC mode."""
     return launch(standalone_mode=False, show=show)
 
 
-# DCC-specific convenience functions
-def launch_maya(show: bool = True) -> Tuple[None, MainWindow]:
-    """Launch Publisher for Maya integration."""
-    _, window = launch(standalone_mode=False, show=show)
-    if window:
-        window.setWindowTitle("Pipeline Publisher - Maya")
-    return (None, window)
-
-
-def launch_houdini(show: bool = True) -> Tuple[None, MainWindow]:
-    """Launch Publisher for Houdini integration."""
-    _, window = launch(standalone_mode=False, show=show)
-    if window:
-        window.setWindowTitle("Pipeline Publisher - Houdini")
-    return (None, window)
-
-
-def launch_nuke(show: bool = True) -> Tuple[None, MainWindow]:
-    """Launch Publisher for Nuke integration."""
-    _, window = launch(standalone_mode=False, show=show)
-    if window:
-        window.setWindowTitle("Pipeline Publisher - Nuke")
-    return (None, window)
-
-
 def get_launcher() -> Optional[PublisherLauncher]:
-    """
-    Get the current launcher instance.
-    
-    Returns:
-        Current PublisherLauncher instance or None if not launched
-    """
+    """Get the current launcher instance (or None if not launched)."""
     return _launcher
 
 
@@ -356,20 +228,15 @@ def main() -> int:
     """
     Main entry point for standalone execution.
     
-    This function is called when running the module as a script:
-    python -m publisher.main
+    Called when running:
+        python -m publisher.main
     
     Returns:
         Exit code (0 for success, non-zero for errors)
     """
     try:
-        # Launch publisher in standalone mode
         app, window = launch_standalone(show=True)
-        
-        # Connect cleanup on quit
         app.aboutToQuit.connect(cleanup)
-        
-        # Run application
         return app.exec()
     
     except KeyboardInterrupt:
@@ -381,37 +248,6 @@ def main() -> int:
         print(f"Error launching Publisher: {e}")
         cleanup()
         return 1
-
-
-def test_launch():
-    """
-    Test function for development and debugging.
-    
-    Launches publisher with additional debugging output.
-    """
-    print("=" * 60)
-    print("Pipeline Publisher - Test Launch")
-    print("=" * 60)
-    
-    # Create launcher with detailed info
-    launcher = PublisherLauncher(standalone_mode=True)
-    
-    # Detect environment
-    environment = launcher.detect_environment()
-    print(f"Detected environment: {environment}")
-    print(f"Standalone mode: {launcher.standalone_mode}")
-    
-    # Launch with signals
-    launcher.window_created.connect(lambda w: print(f"✓ Window created: {w}"))
-    launcher.application_ready.connect(lambda: print("✓ Application ready"))
-    
-    # Launch publisher
-    app, window = launcher.launch()
-    
-    print("✓ Publisher launched successfully")
-    print("=" * 60)
-    
-    return app, window
 
 
 if __name__ == "__main__":

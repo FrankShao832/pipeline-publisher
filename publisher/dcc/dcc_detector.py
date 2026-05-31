@@ -6,15 +6,8 @@ Automatically detects the currently running DCC application.
 
 import sys
 from typing import Optional
-from enum import Enum
 
-
-class DCCType(Enum):
-    """Supported DCC applications."""
-    MAYA = "maya"
-    HOUDINI = "houdini" 
-    NUKE = "nuke"
-    STANDALONE = "standalone"
+from publisher.core.models.enums import DCCType
 
 
 class DCCDetector:

@@ -95,25 +95,30 @@ def test_dcc_detection():
 
 
 def test_launcher_methods():
-    """Test PublisherLauncher methods."""
+    """Test PublisherLauncher methods and module integration."""
     print("\n" + "=" * 50)
-    print("Test 4: Launcher Methods")
+    print("Test 4: Launcher & Module Integration")
     print("=" * 50)
     
     try:
-        launcher = PublisherLauncher(standalone_mode=True)
+        # Test DCC detection via DCCDetector (decoupled from Launcher)
+        from publisher.dcc.dcc_detector import DCCDetector, DCCType
+        dcc_type = DCCDetector.detect()
+        print(f"✓ DCC type: {dcc_type.value}")
         
-        # Test environment detection
-        env = launcher.detect_environment()
-        print(f"✓ Environment: {env}")
-        
-        # Test DCC info
-        dcc_info = launcher.get_dcc_info()
+        dcc_info = DCCDetector.get_dcc_info(dcc_type)
         print(f"✓ DCC info: {dcc_info['name']} - {dcc_info['version']}")
         
-        # Test version info
+        # Test version info via version module
+        from publisher.core.version import get_version_info
+        version_info = get_version_info()
+        print(f"✓ Publisher version: {version_info['publisher_version']}")
+        print(f"✓ Python version: {version_info['python_version']}")
+        
+        # Test launcher lifecycle methods
+        launcher = PublisherLauncher(standalone_mode=True)
         version_info = launcher.get_version_info()
-        print(f"✓ Version info: {version_info['publisher_version']}")
+        print(f"✓ Launcher version info: {version_info['publisher_version']}")
         
         return 0
         

@@ -1,5 +1,5 @@
 """
-Main window for Pipeline Publisher.
+Main window for Y Publisher.
 
 Provides the primary user interface for the publishing tool.
 Minimal version with ContextWidget for testing and validation.
@@ -7,12 +7,21 @@ Minimal version with ContextWidget for testing and validation.
 
 import sys
 import os
+from pathlib import Path
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                               QPushButton, QLabel, QFrame, QApplication, QTextEdit)
 from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtGui import QFont
 
 from .context_widget import ContextWidget
+from publisher.core.version import get_version_info
+from .ui_utils import center_window_on_screen
+from publisher.core.config.settings import ConfigManager
+from publisher.core.services import PublishService, PublishRequest
+from publisher.core.models.enums import PublishType
+from publisher.core.file_system.path_builder import PathBuilder
+from publisher.core.file_system.file_manager import FileManager
+from publisher.core.file_system.test_env import ensure_test_environment
 
 
 class MainWindow(QMainWindow):
@@ -32,17 +41,34 @@ class MainWindow(QMainWindow):
         
         self.standalone_mode = standalone_mode
         self.context_data = {}
+        self.shown_log_messages = set()
+        self.max_log_messages = 1000
         
-        self.setup_window()
+        # User info
+        self.user_name = os.getenv('USER', os.getenv('USERNAME', 'unknown'))
+        # Frank is Admin by default; others controlled by PUBLISHER_ROLE env var
+        default_role = 'admin' if self.user_name.lower() == 'frank' else 'artist'
+        self.user_role = os.getenv('PUBLISHER_ROLE', default_role).lower()
+        self.is_developer = self.user_role in ('admin', 'developer', 'td')
+        
+        # Configuration and publish service
+        self.config_manager = ConfigManager()
+        self.publish_service = PublishService(
+            file_manager=FileManager(),
+            path_builder=PathBuilder(),
+            enable_database=self.config_manager.get_config().enable_database,
+        )
+        
         self.setup_ui()
         self.setup_connections()
         self.setup_styles()
+        self.setup_window()
     
     def setup_window(self):
         """Setup window properties."""
-        self.setWindowTitle("Pipeline Publisher - Test Mode")
-        self.setMinimumSize(400, 600)
-        self.resize(500, 700)
+        self.setWindowTitle("Y Publisher")
+        self.setMinimumSize(400, 840)
+        self.resize(500, 1020)
         
         # Center window on screen
         self.center_window()
@@ -59,19 +85,24 @@ class MainWindow(QMainWindow):
         main_layout.setSpacing(12)
         
         # Header
-        header = self.create_header()
-        main_layout.addWidget(header)
+        # header = self.create_header()
+        # main_layout.addWidget(header)
         
-        # Context widget
-        self.context_widget = ContextWidget(self)
+        # Context widget (includes user info in header)
+        self.context_widget = ContextWidget(
+            self,
+            user_name=self.user_name,
+            user_role=self.user_role,
+        )
         main_layout.addWidget(self.context_widget)
         
-        # Test controls
-        controls_frame = self.create_test_controls()
-        main_layout.addWidget(controls_frame)
+        # Development tools (only visible for admin/developer/TD roles)
+        self.controls_frame = self.create_test_controls()
+        self.controls_frame.setVisible(self.is_developer)
+        main_layout.addWidget(self.controls_frame)
         
         # Status display
-        self.status_display = QLabel("Ready for testing")
+        self.status_display = QLabel("Ready")
         self.status_display.setAlignment(Qt.AlignCenter)
         self.status_display.setFixedHeight(30)
         self.status_display.setObjectName("status_display")
@@ -81,8 +112,9 @@ class MainWindow(QMainWindow):
         log_frame = self.create_log_display()
         main_layout.addWidget(log_frame)
         
-        # Spacer
-        main_layout.addStretch()
+        # Publish bar (Validate + Publish) - at the bottom
+        publish_bar = self.create_publish_bar()
+        main_layout.addWidget(publish_bar)
         
         # Footer
         footer = self.create_footer()
@@ -96,7 +128,7 @@ class MainWindow(QMainWindow):
         self.context_widget.status_changed.connect(self.on_status_changed)
         
         # Log startup
-        self.log_message("Pipeline Publisher started", "info")
+        self.log_message("Y Publisher started", "info")
     
     def setup_styles(self):
         """Setup window styles."""
@@ -111,7 +143,7 @@ class MainWindow(QMainWindow):
             }
             
             QLabel#header_label {
-                font-size: 14pt;
+                font-size: 18pt;
                 font-weight: bold;
                 color: #0078d4;
                 padding: 8px;
@@ -120,7 +152,7 @@ class MainWindow(QMainWindow):
             }
             
             QLabel#footer_label {
-                font-size: 9pt;
+                font-size: 13pt;
                 color: #666666;
                 padding: 8px;
             }
@@ -132,7 +164,7 @@ class MainWindow(QMainWindow):
                 border-radius: 4px;
                 padding: 8px 16px;
                 font-weight: bold;
-                font-size: 10pt;
+                font-size: 14pt;
                 min-height: 32px;
             }
             
@@ -171,15 +203,8 @@ class MainWindow(QMainWindow):
                 border: 1px solid #4a4a4a;
                 border-radius: 4px;
                 padding: 6px;
-                font-size: 10pt;
+                font-size: 14pt;
                 color: #cccccc;
-            }
-            
-            QFrame#controls_frame {
-                background-color: #2b2b2b;
-                border: 1px solid #444444;
-                border-radius: 6px;
-                padding: 12px;
             }
             
             QTextEdit#log_display {
@@ -188,75 +213,138 @@ class MainWindow(QMainWindow):
                 border-radius: 4px;
                 color: #cccccc;
                 font-family: 'Courier New', monospace;
-                font-size: 9pt;
+                font-size: 14pt;
                 padding: 8px;
+            }
+            
+            QFrame#controls_frame {
+                background-color: #2b2b2b;
+                border: 1px solid #444444;
+                border-radius: 6px;
+                padding: 12px;
             }
         """)
     
-    def create_header(self) -> QLabel:
-        """Create header label."""
-        header = QLabel("🚀 Pipeline Publisher - Test Environment")
-        header.setObjectName("header_label")
-        header.setAlignment(Qt.AlignCenter)
-        return header
+    # def create_header(self) -> QLabel:
+    #     """Create header label."""
+    #     header = QLabel("Y Publisher - Test Environment")
+    #     header.setObjectName("header_label")
+    #     header.setAlignment(Qt.AlignCenter)
+    #     return header
     
     def create_test_controls(self) -> QFrame:
-        """Create test control buttons."""
+        """Create debug/development control buttons (4 buttons, 2 rows)."""
         frame = QFrame()
         frame.setObjectName("controls_frame")
         
         layout = QVBoxLayout()
         layout.setSpacing(8)
+        layout.setContentsMargins(12, 8, 12, 8)
         
-        # Title
-        title = QLabel("Test Controls")
-        title.setStyleSheet("font-weight: bold; color: #0078d4; font-size: 11pt;")
+        # Section title - left aligned, 16pt (1pt larger than buttons)
+        title = QLabel("Development Tools")
+        title.setAlignment(Qt.AlignLeft)
+        title.setStyleSheet("font-weight: bold; color: #0078d4; font-size: 16pt; background: transparent; border: none; padding: 2px 0px;")
         layout.addWidget(title)
         
-        # Button row 1
-        button_layout_1 = QHBoxLayout()
+        # Row 1: Show Context + Show Config
+        row1 = QHBoxLayout()
+        row1.setSpacing(8)
         
-        refresh_btn = QPushButton("🔄 Refresh Context")
-        refresh_btn.setObjectName("test_button")
-        refresh_btn.clicked.connect(self.refresh_context)
-        button_layout_1.addWidget(refresh_btn)
+        show_ctx_btn = QPushButton("Show Context")
+        show_ctx_btn.setObjectName("test_button")
+        show_ctx_btn.clicked.connect(self.show_context_data)
+        row1.addWidget(show_ctx_btn)
         
-        validate_btn = QPushButton("✓ Validate Context")
-        validate_btn.setObjectName("test_button")
-        validate_btn.clicked.connect(self.validate_context)
-        button_layout_1.addWidget(validate_btn)
+        show_cfg_btn = QPushButton("Show Config")
+        show_cfg_btn.setObjectName("test_button")
+        show_cfg_btn.clicked.connect(self.show_config)
+        row1.addWidget(show_cfg_btn)
         
-        layout.addLayout(button_layout_1)
+        layout.addLayout(row1)
         
-        # Button row 2
-        button_layout_2 = QHBoxLayout()
+        # Row 2: Init Test Env + Reload Config
+        row2 = QHBoxLayout()
+        row2.setSpacing(8)
         
-        test_env_btn = QPushButton("🧪 Test Environment")
-        test_env_btn.setObjectName("test_button")
-        test_env_btn.clicked.connect(self.test_environment)
-        button_layout_2.addWidget(test_env_btn)
+        init_env_btn = QPushButton("Init Test Env")
+        init_env_btn.setObjectName("test_button")
+        init_env_btn.clicked.connect(self.init_test_environment)
+        row2.addWidget(init_env_btn)
         
-        show_data_btn = QPushButton("📋 Show Context Data")
-        show_data_btn.setObjectName("test_button")
-        show_data_btn.clicked.connect(self.show_context_data)
-        button_layout_2.addWidget(show_data_btn)
+        reload_cfg_btn = QPushButton("Reload Config")
+        reload_cfg_btn.setObjectName("test_button")
+        reload_cfg_btn.clicked.connect(self.reload_config)
+        row2.addWidget(reload_cfg_btn)
         
-        layout.addLayout(button_layout_2)
+        layout.addLayout(row2)
         
-        # Button row 3
-        button_layout_3 = QHBoxLayout()
+        frame.setLayout(layout)
+        return frame
+    
+    def create_publish_bar(self) -> QFrame:
+        """Create publish action bar (Validate + Publish) at the bottom."""
+        frame = QFrame()
+        frame.setObjectName("controls_frame")
+        frame.setStyleSheet("""
+            QFrame#controls_frame {
+                background-color: #2b2b2b;
+                border: 2px solid #0078d4;
+                border-radius: 6px;
+                padding: 4px;
+            }
+        """)
         
-        set_env_btn = QPushButton("⚙️ Set Test Environment")
-        set_env_btn.setObjectName("test_button")
-        set_env_btn.clicked.connect(self.set_test_environment)
-        button_layout_3.addWidget(set_env_btn)
+        layout = QHBoxLayout()
+        layout.setSpacing(12)
+        layout.setContentsMargins(8, 4, 8, 4)
         
-        clear_env_btn = QPushButton("🗑️ Clear Environment")
-        clear_env_btn.setObjectName("test_button")
-        clear_env_btn.clicked.connect(self.clear_environment)
-        button_layout_3.addWidget(clear_env_btn)
+        # Validate button (left) - equal split with Publish
+        self.validate_btn = QPushButton("✓ Validate")
+        self.validate_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4a4a4a;
+                color: #ffffff;
+                border: 1px solid #555555;
+                border-radius: 4px;
+                padding: 6px 16px;
+                font-size: 15pt;
+                font-weight: bold;
+                min-height: 32px;
+            }
+            QPushButton:hover {
+                background-color: #5a5a5a;
+                border-color: #666666;
+            }
+            QPushButton:pressed {
+                background-color: #3a3a3a;
+            }
+        """)
+        self.validate_btn.clicked.connect(self.validate_and_publish)
+        layout.addWidget(self.validate_btn)
         
-        layout.addLayout(button_layout_3)
+        # Publish button (right) - prominent blue, equal split
+        self.publish_btn = QPushButton("▶ Publish")
+        self.publish_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #0078d4;
+                color: #ffffff;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 16px;
+                font-size: 15pt;
+                font-weight: bold;
+                min-height: 32px;
+            }
+            QPushButton:hover {
+                background-color: #1084d8;
+            }
+            QPushButton:pressed {
+                background-color: #005a9e;
+            }
+        """)
+        self.publish_btn.clicked.connect(self.execute_publish)
+        layout.addWidget(self.publish_btn)
         
         frame.setLayout(layout)
         return frame
@@ -277,8 +365,10 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(8, 8, 8, 8)
         
         # Log title
-        log_title = QLabel("📋 Activity Log")
-        log_title.setStyleSheet("color: #0078d4; font-weight: bold; font-size: 11pt;")
+        log_title = QLabel("Activity Log")
+        log_title.setStyleSheet(
+            "color: #0078d4; font-weight: bold; font-size: 16pt;"
+        )
         layout.addWidget(log_title)
         
         # Log text area
@@ -292,28 +382,33 @@ class MainWindow(QMainWindow):
         return log_frame
     
     def create_footer(self) -> QLabel:
-        """Create footer label."""
-        footer = QLabel("Pipeline Publisher v1.0.0 - Test Mode | Python 3.11 | PySide6")
+        """Create footer label with dynamic version info."""
+        info = get_version_info()
+        footer = QLabel(
+            f"Y Publisher V {info['publisher_version']} - "
+            f"Python {info['python_version']} | {info['pyside6_version']}"
+        )
         footer.setObjectName("footer_label")
         footer.setAlignment(Qt.AlignCenter)
         return footer
     
     def center_window(self):
-        """Center window on screen."""
-        screen = QApplication.primaryScreen()
-        screen_geometry = screen.availableGeometry()
-        
-        x = (screen_geometry.width() - self.width()) // 2
-        y = (screen_geometry.height() - self.height()) // 2
-        
-        self.move(x, y)
+        """Center window on screen using ui_utils."""
+        center_window_on_screen(self)
     
     # Slot methods
     @Slot(dict)
     def on_context_changed(self, context: dict):
         """Handle context changes."""
-        self.context_data = context
-        self.log_message(f"Context changed: {context.get('project', 'N/A')}", "info")
+        # Only log if significant change occurred (not just periodic updates)
+        old_project = self.context_data.get('project', 'Not set')
+        new_project = context.get('project', 'Not set')
+        
+        if old_project != new_project:
+            self.context_data = context
+            self.log_message(f"Context changed: {new_project}", "info")
+        else:
+            self.context_data = context  # Update data without logging
     
     @Slot(str, str)
     def on_status_changed(self, message: str, status_type: str):
@@ -321,45 +416,10 @@ class MainWindow(QMainWindow):
         self.update_status(f"Context Status: {message}", status_type)
         self.log_message(f"[{status_type.upper()}] {message}", status_type)
     
-    # Button handlers
-    def refresh_context(self):
-        """Refresh context information."""
-        self.context_widget.manual_refresh()
-        self.update_status("Context refreshed successfully", "success")
-        self.log_message("Context refreshed manually", "info")
-    
-    def validate_context(self):
-        """Validate context data."""
-        if self.context_widget.is_context_valid():
-            self.update_status("✓ Context validation passed", "success")
-            self.log_message("✓ Context validation passed", "success")
-            self.test_completed.emit(True, "Context validation passed")
-        else:
-            self.update_status("✗ Context validation failed", "error")
-            self.log_message("✗ Context validation failed", "error")
-            self.test_completed.emit(False, "Context validation failed")
-    
-    def test_environment(self):
-        """Test environment setup."""
-        dcc = self.context_widget.detect_dcc()
-        version = self.context_widget.get_dcc_version()
-        user = self.context_widget.get_user()
-        
-        result = f"""
-Environment Test Results:
-├─ DCC: {dcc}
-├─ DCC Version: {version}
-├─ User: {user}
-├─ Python: {sys.version.split()[0]}
-└─ Standalone Mode: {self.standalone_mode}
-        """.strip()
-        
-        self.log_message(result, "info")
-        print(result)
-        self.update_status("Environment test completed", "success")
+    # ---- Dev/Debug Button Handlers ----
     
     def show_context_data(self):
-        """Display current context data."""
+        """Display current context data (from env vars)."""
         context = self.context_widget.get_context_data()
         
         result = "Current Context Data:\n" + "=" * 50 + "\n"
@@ -370,34 +430,131 @@ Environment Test Results:
         print(result)
         self.update_status("Context data displayed", "success")
     
-    def set_test_environment(self):
-        """Set test environment variables."""
-        test_data = {
-            'SHOW': 'test_project',
-            'SEQ': 'seq001',
-            'SHOT': 'shot001',
-            'ROLE': 'test_role',
-            'PROJECT_ROOT': '/test/project_root',
-            'PUBLISH_ROOT': '/test/publish_root'
+    def show_config(self):
+        """Display current YAML configuration."""
+        config = self.config_manager.get_config()
+        
+        result = "Current Configuration:\n" + "=" * 50 + f"""
+Config source: {self.config_manager._config_path or '(defaults)'}
+enable_database: {config.enable_database}
+publish_root:    {config.publish_root or '(not set)'}
+project_root:    {config.project_root or '(not set)'}
+DB host:         {config.database.host}
+DB port:         {config.database.port}
+Log level:       {config.logging.level}
+"""
+        self.log_message(result, "info")
+        print(result)
+        self.update_status("Config displayed", "success")
+    
+    def init_test_environment(self):
+        """Initialize test environment (create dirs + set default env vars)."""
+        config = self.config_manager.get_config()
+        project_root = Path(config.project_root) if config.project_root else None
+        publish_root = Path(config.publish_root) if config.publish_root else None
+        
+        ensure_test_environment(project_root, publish_root)
+        self.context_widget.manual_refresh()
+        
+        self.log_message("Test environment initialized", "success")
+        self.update_status("Test environment ready", "success")
+    
+    def reload_config(self):
+        """Reload YAML configuration and update publish service."""
+        self.config_manager.reload()
+        config = self.config_manager.get_config()
+        self.publish_service.enable_database = config.enable_database
+        
+        self.log_message(
+            f"Config reloaded (db={'on' if config.enable_database else 'off'})",
+            "info",
+        )
+        self.update_status("Configuration reloaded", "success")
+    
+    # ---- Publish Bar Handlers ----
+    
+    def validate_and_publish(self):
+        """Validate context, then execute publish if valid."""
+        if not self.context_widget.is_context_valid():
+            self.update_status("✗ Validation failed: missing context fields", "error")
+            self.log_message("✗ Cannot publish: context validation failed", "error")
+            return
+        
+        # Context is valid, proceed to publish
+        self.execute_publish()
+    
+    def execute_publish(self):
+        """Execute publish using PublishService with current context."""
+        context = self.context_widget.get_context_data()
+        config = self.config_manager.get_config()
+        
+        # Get publish root from config (with env var fallback)
+        publish_root = (
+            config.publish_root
+            or os.getenv('PUBLISH_ROOT')
+            or '/Volumes/Projects/y_pipeline_publish/Test'
+        )
+        
+        # Build context dict for PublishService
+        service_context = {
+            'project': context.get('project', 'Not set'),
+            'sequence': context.get('sequence', 'Not set'),
+            'shot': context.get('shot', 'Not set'),
+            'role': context.get('role', 'Not set').lower(),
+            'publish_root': publish_root,
         }
         
-        for key, value in test_data.items():
-            os.environ[key] = value
+        # Find source file in project root
+        project_root = (
+            config.project_root
+            or os.getenv('PROJECT_ROOT')
+            or '/Volumes/Projects/y_pipeline_projects/Test'
+        )
         
-        self.context_widget.manual_refresh()
-        self.update_status("Test environment variables set", "success")
-        self.log_message(f"Set test environment: {test_data['SHOW']}", "info")
-    
-    def clear_environment(self):
-        """Clear test environment variables."""
-        env_vars = ['SHOW', 'SEQ', 'SHOT', 'ROLE', 'PROJECT_ROOT', 'PUBLISH_ROOT']
-        for var in env_vars:
-            if var in os.environ:
-                del os.environ[var]
+        # Try to find a source file matching the current DCC role
+        role = service_context['role']
+        source_dir = Path(project_root) / context.get('project', '') / context.get('sequence', '') / context.get('shot', '') / role
         
-        self.context_widget.manual_refresh()
-        self.update_status("Environment variables cleared", "success")
-        self.log_message("Environment variables cleared", "warning")
+        source_files = {
+            'maya': '*.ma',
+            'houdini': '*.hip',
+            'nuke': '*.nk',
+        }
+        
+        source_path = None
+        pattern = source_files.get(role, '*')
+        if source_dir.exists():
+            matches = list(source_dir.glob(pattern))
+            if matches:
+                source_path = str(matches[0])
+        
+        if not source_path:
+            self.update_status(f"✗ No source file found in {source_dir}", "error")
+            self.log_message(f"✗ No source file found matching role '{role}'", "error")
+            return
+        
+        # Execute publish
+        request = PublishRequest(
+            source_path=source_path,
+            publish_type=PublishType.SCRIPT,
+            context=service_context,
+            note="Published from standalone mode",
+        )
+        
+        result = self.publish_service.execute_publish(request)
+        
+        if result.success:
+            self.update_status(
+                f"✓ Published v{result.version}: {Path(source_path).name}",
+                "success",
+            )
+            self.log_message(
+                f"✓ Published: {Path(source_path).name} → {result.publish_path} [{result.version}]",
+                "success",
+            )
+        else:
+            self.update_status(f"✗ Publish failed: {result.message}", "error")
+            self.log_message(f"✗ Publish failed: {result.message}", "error")
     
     # Helper methods
     def update_status(self, message: str, status_type: str = "info"):
@@ -418,7 +575,7 @@ Environment Test Results:
                 border: 1px solid {color};
                 border-radius: 4px;
                 padding: 6px;
-                font-size: 10pt;
+                font-size: 14pt;
                 color: {color};
                 font-weight: normal;
             }}
@@ -427,6 +584,24 @@ Environment Test Results:
     def log_message(self, message: str, log_type: str = "info"):
         """Add message to log display."""
         import datetime
+        
+        # Create message hash for deduplication
+        message_hash = f"{message}_{log_type}"
+        
+        # Skip if this exact message was already shown (except for critical errors)
+        if message_hash in self.shown_log_messages and log_type in ['info', 'success', 'warning']:
+            return  # Skip duplicate messages
+        
+        # For errors, always show, but for other types, prevent repeats
+        if log_type != 'error':
+            self.shown_log_messages.add(message_hash)
+        
+        # Manage log size - remove old messages if too many
+        if len(self.shown_log_messages) > self.max_log_messages:
+            # Remove oldest messages (FIFO)
+            oldest_messages = list(self.shown_log_messages)[:100]
+            for old_msg in oldest_messages:
+                self.shown_log_messages.discard(old_msg)
         
         timestamp = datetime.datetime.now().strftime("%H:%M:%S")
         formatted_message = f"[{timestamp}] {message}"
@@ -451,6 +626,8 @@ Environment Test Results:
     def show(self):
         """Show window and emit ready signal."""
         super().show()
+        # Re-center after layout is finalized
+        self.center_window()
         self.window_ready.emit()
     
     def cleanup(self):
@@ -461,8 +638,8 @@ Environment Test Results:
 def test_main_window():
     """Test main window functionality."""
     app = QApplication(sys.argv)
-    app.setApplicationName("Pipeline Publisher")
-    app.setOrganizationName("Pipeline Team")
+    app.setApplicationName("Y Publisher")
+    app.setOrganizationName("Frank")
     
     window = MainWindow(standalone_mode=True)
     window.show()

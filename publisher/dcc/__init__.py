@@ -1,7 +1,14 @@
 """
-DCC adapters for Pipeline Publisher.
+DCC integration layer for Pipeline Publisher.
 
-Provides unified interface for different DCC applications.
+Provides DCC detection and adapters for cross-application compatibility.
 """
 
-__all__ = ['base_dcc', 'dcc_maya', 'dcc_houdini', 'dcc_nuke']
+from .dcc_detector import DCCDetector, DCCType
+from . import launcher
+
+__all__ = [
+    'DCCDetector',
+    'DCCType',
+    'launcher',
+]
