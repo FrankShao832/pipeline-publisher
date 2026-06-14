@@ -15,7 +15,7 @@ def get_app_icon() -> QIcon:
     Returns:
         QIcon instance. Returns empty QIcon if icon file not found.
     """
-    icon_path = Path(__file__).parent / "imgs" / "app_icon.png"
+    icon_path = Path(__file__).parent.parent / "imgs" / "app_icon.png"
     if icon_path.exists():
         return QIcon(str(icon_path))
     return QIcon()

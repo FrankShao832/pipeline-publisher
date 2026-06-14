@@ -119,10 +119,14 @@ class ConfigManager:
         
         try:
             import yaml
+        except ImportError:
+            return {}
+
+        try:
             with open(self._config_path, 'r') as f:
                 result = yaml.safe_load(f)
                 return result if isinstance(result, dict) else {}
-        except (ImportError, yaml.YAMLError, OSError):
+        except (yaml.YAMLError, OSError):
             return {}
     
     def get_config(self) -> PublisherConfig:

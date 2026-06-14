@@ -78,6 +78,51 @@ class VersionStrategy(Enum):
         return names.get(self.name, self.name)
 
 
+class DepartmentType(Enum):
+    """Pipeline department/工种 — the production step or discipline.
+
+    This replaces the ambiguous 'role' field in pipeline context.
+    Department determines directory structure and default DCC mapping.
+    """
+    MODEL = "model"
+    RIG = "rig"
+    ANIM = "anim"
+    FX = "fx"
+    LIGHTING = "lighting"
+    LAYOUT = "layout"
+    COMP = "comp"
+    ASSETS = "assets"       # Asset library
+    DESIGN = "design"       # Concept / lookdev
+    UNKNOWN = "unknown"
+
+    def __str__(self) -> str:
+        return self.value
+
+    @property
+    def display_name(self) -> str:
+        """Get human-readable display name."""
+        names = {
+            'model': 'Modeling',
+            'rig': 'Rigging',
+            'anim': 'Animation',
+            'fx': 'Effects',
+            'lighting': 'Lighting',
+            'layout': 'Layout',
+            'comp': 'Compositing',
+            'assets': 'Assets',
+            'design': 'Design',
+        }
+        return names.get(self.value, self.value.capitalize())
+
+    @classmethod
+    def from_string(cls, name: str) -> 'DepartmentType':
+        """Safe parse from string, returns UNKNOWN on mismatch."""
+        for dept in cls:
+            if dept.value == name.lower():
+                return dept
+        return cls.UNKNOWN
+
+
 class PublishStatus(Enum):
     """Status of a publish record."""
     CURRENT = "current"        # Current active version

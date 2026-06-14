@@ -31,8 +31,9 @@ class PublishRequest:
     """Request data for a publish operation."""
     source_path: str
     publish_type: PublishType
-    context: Dict[str, str]  # project, sequence, shot, role, publish_root, project_root
+    context: Dict[str, str]  # project, sequence, shot, department, publish_root, project_root
     note: str = ""
+    save_before_publish: bool = False  # If True, save source as new version before publishing
 
 
 @dataclass
@@ -47,7 +48,7 @@ class PublishResult:
 
 # Required context fields for validation
 REQUIRED_CONTEXT_FIELDS = [
-    'project', 'sequence', 'shot', 'role', 'publish_root'
+    'project', 'sequence', 'shot', 'department', 'publish_root'
 ]
 
 
@@ -111,27 +112,50 @@ class PublishService:
             project = context['project']
             sequence = context['sequence']
             shot = context['shot']
-            role = context['role']
+            department = context['department']
             publish_root = context['publish_root']
             publish_type = request.publish_type.value
 
-            # The type directory (e.g., .../maya/script/) contains version subdirs
+            # The type directory (e.g., .../fx/script/) contains version subdirs
             version_parent = (
-                Path(publish_root) / project / sequence / shot / role / publish_type
+                Path(publish_root) / project / sequence / shot / department / publish_type
             )
 
             version = self.path_builder.next_version(version_parent)
 
-            # Step 4: Build target path
+            # Step 4a: Save & version-up (standalone dev mode)
+            #
+            # Instead of deriving the publish version from the publish dir scan,
+            # we version-up the SOURCE file itself (e.g. shot001_v010.ma -> shot001_v011.ma)
+            # and use THAT version as the publish version.
+            #
+            # This matches the big-studio Save & Publish workflow:
+            #   1. Save current work
+            #   2. Version up work file (v010 -> v011)
+            #   3. Publish the version-upp'ed file as v011
+            #   4. Artist continues on v011
+            if request.save_before_publish:
+                new_name = self.path_builder.version_up_filename(source.name)
+                versioned_source = source.parent / new_name
+                self.file_manager.copy_file(source, versioned_source, overwrite=True)
+                self.logger.info(f"Saved as new version: {versioned_source}")
+                source = versioned_source
+                # Re-derive version from the version-upp'ed filename
+                extracted = self.path_builder.extract_version(str(source))
+                if extracted:
+                    version = extracted
+
+            # Step 4b: Build target path with publish-versioned filename
+            pub_filename = self.path_builder.publish_filename(source.name, version)
             target = self.path_builder.build_publish_path(
                 publish_root=publish_root,
                 project=project,
                 sequence=sequence,
                 shot=shot,
-                role=role,
+                department=department,
                 publish_type=publish_type,
                 version=version,
-                filename=source.name,
+                filename=pub_filename,
             )
 
             # Step 5: Check duplicate (simple mode: skip if already exists?)
@@ -168,7 +192,7 @@ class PublishService:
 
             return PublishResult(
                 success=True,
-                message=f"Published successfully: {source.name} → v{version}",
+                message=f"Published successfully: {source.name} → {version}",
                 publish_path=str(target),
                 version=version,
             )

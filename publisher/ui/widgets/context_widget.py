@@ -1,7 +1,7 @@
 """
 Context information widget for Pipeline Publisher.
 
-Displays project, sequence, shot, and role information.
+Displays project, sequence, shot, department, user, and DCC information.
 """
 
 import os
@@ -19,7 +19,7 @@ class ContextWidget(QWidget):
     """
     Widget displaying pipeline context information.
     
-    Shows project, sequence, shot, role, user, DCC information
+    Shows project, sequence, shot, department, user, DCC information
     with real-time updates and status indicators.
     """
     
@@ -67,12 +67,35 @@ class ContextWidget(QWidget):
         
         self.setLayout(main_layout)
     
-    def create_header(self) -> QLabel:
-        """Create header label with user info, right-aligned."""
+    def create_header(self) -> QWidget:
+        """Create header with 'Context' on the left and user info on the right."""
         role_display = self.user_role.capitalize()
-        
-        header = QLabel(f"User: {self.user_name}  [ {role_display} ]")
-        header.setStyleSheet("""
+
+        header_widget = QWidget()
+        header_widget.setStyleSheet("background: transparent; border: none;")
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # "Context" title on the left
+        context_title = QLabel("Context")
+        context_title.setStyleSheet("""
+            QLabel {
+                font-size: 20pt;
+                font-weight: bold;
+                color: #0078d4;
+                background-color: transparent;
+                border: none;
+                padding: 8px;
+            }
+        """)
+        layout.addWidget(context_title)
+
+        layout.addStretch()
+
+        # User info on the right
+        user_label = QLabel(f"User: {self.user_name}  [ {role_display} ]")
+        user_label.setStyleSheet("""
             QLabel {
                 font-size: 16pt;
                 font-weight: bold;
@@ -82,8 +105,10 @@ class ContextWidget(QWidget):
                 padding: 8px;
             }
         """)
-        header.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        return header
+        layout.addWidget(user_label)
+
+        header_widget.setLayout(layout)
+        return header_widget
     
     def create_context_group(self) -> QGroupBox:
         """Create context information group with individual styling."""
@@ -135,8 +160,8 @@ class ContextWidget(QWidget):
         layout.addRow("Version:", self.version_label)
         
         # Role information with individual styling
-        self.role_label = self._create_context_value_label("Not set")
-        layout.addRow("Role:", self.role_label)
+        self.department_label = self._create_context_value_label("Not set")
+        layout.addRow("Department:", self.department_label)
         
         # User information with individual styling
         self.user_label = self._create_context_value_label("Not set")
@@ -221,7 +246,7 @@ class ContextWidget(QWidget):
             'project': os.getenv('SHOW', 'Not set'),
             'sequence': os.getenv('SEQ', 'Not set'),
             'shot': os.getenv('SHOT', 'Not set'),
-            'role': os.getenv('ROLE', 'Not set'),
+            'department': os.getenv('PIPELINE_DEPARTMENT', os.getenv('ROLE', 'Not set')),
             'user': self.get_user(),
             'dcc': self.detect_dcc(),
             'file_version': self.detect_file_version(),
@@ -256,7 +281,7 @@ class ContextWidget(QWidget):
         """
         Detect file version from source filename in the project workspace.
         
-        Looks for source files in {project_root}/{project}/{seq}/{shot}/{role}/
+        Looks for source files in {project_root}/{project}/{seq}/{shot}/{department}/
         and extracts version from filename pattern like _v001, _v002, etc.
         
         Returns:
@@ -265,23 +290,26 @@ class ContextWidget(QWidget):
         project = self.context_data.get('project', '')
         sequence = self.context_data.get('sequence', '')
         shot = self.context_data.get('shot', '')
-        role = self.context_data.get('role', '')
+        department = self.context_data.get('department', '')
         project_root = os.getenv('PROJECT_ROOT', '')
         
-        if not all([project, sequence, shot, role, project_root]):
+        if not all([project, sequence, shot, department, project_root]):
             return 'N/A'
         
-        role_dir = Path(project_root) / project / sequence / shot / role
-        if not role_dir.exists():
+        dept_dir = Path(project_root) / project / sequence / shot / department
+        if not dept_dir.exists():
             return 'N/A'
         
-        # DCC file extensions to look for
-        extensions = {'maya': '*.ma', 'houdini': '*.hip', 'nuke': '*.nk'}
-        pattern = extensions.get(role, '*')
-        
-        files = list(role_dir.glob(pattern))
+        # Determine DCC from department and get extension patterns
+        from publisher.core.constants import get_dcc_for_department, get_extensions_for_dcc
+        dcc = get_dcc_for_department(department)
+        patterns = get_extensions_for_dcc(dcc)
+
+        files = []
+        for p in patterns:
+            files.extend(dept_dir.glob(p))
         if not files:
-            files = list(role_dir.iterdir())
+            files = list(dept_dir.iterdir())
         
         if not files:
             return 'N/A'
@@ -301,14 +329,14 @@ class ContextWidget(QWidget):
         self.project_label.setText(self.context_data['project'])
         self.sequence_label.setText(self.context_data['sequence'])
         self.shot_label.setText(self.context_data['shot'])
-        self.role_label.setText(self.context_data['role'])
+        self.department_label.setText(self.context_data['department'])
         self.user_label.setText(self.context_data['user'])
         self.dcc_label.setText(self.context_data['dcc'])
         self.version_label.setText(self.context_data['file_version'])
     
     def validate_context(self):
         """Validate context and update status indicators."""
-        required_fields = ['project', 'sequence', 'shot', 'role']
+        required_fields = ['project', 'sequence', 'shot', 'department']
         missing_fields = []
         
         for field in required_fields:
@@ -368,7 +396,7 @@ class ContextWidget(QWidget):
     
     def is_context_valid(self) -> bool:
         """Check if context is valid for publishing."""
-        required_fields = ['project', 'sequence', 'shot', 'role']
+        required_fields = ['project', 'sequence', 'shot', 'department']
         return all(self.context_data.get(field) != 'Not set' for field in required_fields)
     
     def manual_refresh(self):

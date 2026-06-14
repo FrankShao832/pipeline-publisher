@@ -18,9 +18,9 @@ from typing import Optional
 FALLBACK_PROJECT_ROOT = Path("/Volumes/Projects/y_pipeline_projects/Test")
 FALLBACK_PUBLISH_ROOT = Path("/Volumes/Projects/y_pipeline_publish/Test")
 
-# Shot subdirectories named after DCC tools
-DCC_ROLES = ['maya', 'houdini', 'nuke']
-# Publish type subdirectories under each role
+# Shot subdirectories named after departments (not DCC names)
+TEST_DEPARTMENTS = ['anim', 'fx', 'comp']
+# Publish type subdirectories under each department
 PUBLISH_TYPES = ['script', 'cache', 'render']
 
 
@@ -31,7 +31,7 @@ def ensure_test_environment(
     """
     Ensure test directories exist and set default environment variables.
 
-    Creates source files and publish directories for each DCC role.
+    Creates source files and publish directories for each department.
     Only creates files if they don't already exist.
 
     Args:
@@ -46,15 +46,15 @@ def ensure_test_environment(
 
     created_any = False
 
-    # --- Create source files for each DCC ---
-    dcc_files = {
-        'maya': ('shot001_v001.ma', '# Maya scene file\n'),
-        'houdini': ('shot001_v001.hip', '# Houdini hip file\n'),
-        'nuke': ('shot001_v001.nk', '# Nuke script\n'),
+    # --- Create source files for each department ---
+    dept_files = {
+        'anim': ('shot001_v001.ma', '# Maya scene file\n'),
+        'fx':   ('shot001_v001.hip', '# Houdini hip file\n'),
+        'comp': ('shot001_v001.nk', '# Nuke script\n'),
     }
 
-    for role, (filename, content) in dcc_files.items():
-        source_dir = project_root / 'test_project' / 'seq001' / 'shot001' / role
+    for department, (filename, content) in dept_files.items():
+        source_dir = project_root / 'test_project' / 'seq001' / 'shot001' / department
         source_file = source_dir / filename
 
         if not source_file.exists():
@@ -63,14 +63,14 @@ def ensure_test_environment(
             created_any = True
 
     # --- Create publish directories ---
-    for role in DCC_ROLES:
+    for department in TEST_DEPARTMENTS:
         for publish_type in PUBLISH_TYPES:
             version_dir = (
                 publish_root
                 / 'test_project'
                 / 'seq001'
                 / 'shot001'
-                / role
+                / department
                 / publish_type
                 / 'v001'
             )
@@ -83,7 +83,7 @@ def ensure_test_environment(
         'SHOW': 'test_project',
         'SEQ': 'seq001',
         'SHOT': 'shot001',
-        'ROLE': 'maya',
+        'PIPELINE_DEPARTMENT': 'fx',
         'PROJECT_ROOT': str(project_root),
         'PUBLISH_ROOT': str(publish_root),
     }

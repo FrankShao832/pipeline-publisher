@@ -28,7 +28,8 @@ from PySide6.QtCore import QObject, Signal
 from publisher.ui.main_window import MainWindow
 from publisher.dcc.dcc_detector import DCCDetector, DCCType
 from publisher.core.version import get_version_info
-from publisher.ui.ui_utils import get_app_icon
+from publisher.core.controller import PublisherController
+from publisher.ui.utils.ui_utils import get_app_icon
 
 
 class PublisherLauncher(QObject):
@@ -57,6 +58,7 @@ class PublisherLauncher(QObject):
         super().__init__(parent)
         
         self.standalone_mode = standalone_mode
+        self.controller = PublisherController(standalone_mode=standalone_mode)
         self.application: Optional[QApplication] = None
         self.window: Optional[MainWindow] = None
         self.is_running = False
@@ -82,8 +84,8 @@ class PublisherLauncher(QObject):
         return app
     
     def create_window(self) -> MainWindow:
-        """Create main window instance."""
-        window = MainWindow(standalone_mode=self.standalone_mode)
+        """Create main window instance with controller."""
+        window = MainWindow(controller=self.controller)
         window.setWindowTitle("Y Publisher V 2.0.0")
         
         # Connect window ready signal

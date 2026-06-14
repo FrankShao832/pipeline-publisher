@@ -2,15 +2,17 @@
 Path construction utilities for Pipeline Publisher.
 
 Builds consistent pipeline paths for source (work) and publish directories.
-Supports multi-DCC directory structure where role = DCC name (maya/houdini/nuke).
 
 Path patterns:
-  Work:     {project_root}/{project}/{seq}/{shot}/{role}/{filename}
-  Publish:  {publish_root}/{project}/{seq}/{shot}/{role}/{type}/v{XXX}/{filename}
+  Work:     {project_root}/{project}/{seq}/{shot}/{department}/{filename}
+  Publish:  {publish_root}/{project}/{seq}/{shot}/{department}/{type}/v{XXX}/{filename}
+
+Department replaces the ambiguous 'role' field — see publisher.core.constants.
 """
 
 from pathlib import Path
 from typing import List, Optional
+import re
 
 
 class PathBuilder:
@@ -22,24 +24,24 @@ class PathBuilder:
         project: str,
         sequence: str,
         shot: str,
-        role: str,
+        department: str,
         filename: str,
     ) -> Path:
         """
         Build source file path in the project workspace.
 
         Args:
-            project_root: Root directory for all projects (e.g., /Volumes/Projects/y_pipeline_projects/Test)
+            project_root: Root directory for all projects
             project: Project name (e.g., test_project)
             sequence: Sequence name (e.g., seq001)
             shot: Shot name (e.g., shot001)
-            role: DCC role folder (e.g., maya, houdini, nuke)
-            filename: Source filename (e.g., shot001_v001.ma)
+            department: Department/工种 (e.g., fx, anim, lighting)
+            filename: Source filename (e.g., shot001_v001.hip)
 
         Returns:
-            Path: {project_root}/{project}/{seq}/{shot}/{role}/{filename}
+            Path: {project_root}/{project}/{seq}/{shot}/{department}/{filename}
         """
-        return Path(project_root) / project / sequence / shot / role / filename
+        return Path(project_root) / project / sequence / shot / department / filename
 
     @staticmethod
     def build_publish_path(
@@ -47,7 +49,7 @@ class PathBuilder:
         project: str,
         sequence: str,
         shot: str,
-        role: str,
+        department: str,
         publish_type: str,
         version: str,
         filename: str,
@@ -60,20 +62,20 @@ class PathBuilder:
             project: Project name
             sequence: Sequence name
             shot: Shot name
-            role: DCC role folder
+            department: Department/工种
             publish_type: Type of publish (script, cache, render)
             version: Version string (e.g., v001, v002)
             filename: Source filename to publish
 
         Returns:
-            Path: {publish_root}/{project}/{seq}/{shot}/{role}/{type}/v{XXX}/{filename}
+            Path: {publish_root}/{project}/{seq}/{shot}/{department}/{type}/v{XXX}/{filename}
         """
         return (
             Path(publish_root)
             / project
             / sequence
             / shot
-            / role
+            / department
             / publish_type
             / version
             / filename
@@ -85,7 +87,7 @@ class PathBuilder:
         project: str,
         sequence: str,
         shot: str,
-        role: str,
+        department: str,
         publish_type: str,
         version: str,
     ) -> Path:
@@ -93,17 +95,99 @@ class PathBuilder:
         Build publish version directory path (without filename).
 
         Returns:
-            Path: {publish_root}/{project}/{seq}/{shot}/{role}/{type}/v{XXX}/
+            Path: {publish_root}/{project}/{seq}/{shot}/{department}/{type}/{version}
         """
         return (
             Path(publish_root)
             / project
             / sequence
             / shot
-            / role
+            / department
             / publish_type
             / version
         )
+
+    @staticmethod
+    def publish_filename(source_name: str, version: str) -> str:
+        """Generate publish filename with version embedded in the name.
+
+        Replaces any existing _vXXX suffix with the publish version.
+        If no version suffix exists, appends the publish version.
+
+        Examples:
+            'shot001_v001.ma', 'v010'  → 'shot001_v010.ma'
+            'shot001.ma',       'v010'  → 'shot001_v010.ma'
+            'script.py',        'v010'  → 'script_v010.py'
+
+        Args:
+            source_name: Original source filename
+            version: Publish version string (e.g. 'v010')
+
+        Returns:
+            Filename with publish version embedded
+        """
+        p = Path(source_name)
+        stem = p.stem
+        ext = p.suffix
+
+        # Replace existing _vXXX pattern, or append new version suffix
+        if re.search(r'_v\d+$', stem):
+            new_stem = re.sub(r'_v\d+$', f'_{version}', stem)
+        else:
+            new_stem = f'{stem}_{version}'
+
+        return f'{new_stem}{ext}'
+
+    @staticmethod
+    def extract_version(filename: str) -> Optional[str]:
+        """Extract version string from a filename.
+
+        Looks for _vXXX pattern at the end of the stem.
+
+        Examples:
+            'shot001_v010.ma' → 'v010'
+            'shot001.ma'      → None
+
+        Args:
+            filename: Filename to extract version from
+
+        Returns:
+            Version string (e.g. 'v010') or None
+        """
+        p = Path(filename)
+        match = re.search(r'_v(\d+)$', p.stem)
+        if match:
+            return f"v{match.group(1)}"
+        return None
+
+    @staticmethod
+    def version_up_filename(filename: str, padding: int = 3) -> str:
+        """Increment the version number in a filename by 1.
+
+        Examples:
+            'shot001_v010.ma' → 'shot001_v011.ma'
+            'shot001.ma'      → 'shot001_v001.ma'  (if no version, start at v001)
+
+        Args:
+            filename: Source filename
+            padding: Zero-padding width (default: 3)
+
+        Returns:
+            Filename with incremented version
+        """
+        p = Path(filename)
+        stem = p.stem
+        ext = p.suffix
+
+        match = re.search(r'_v(\d+)$', stem)
+        if match:
+            current_num = int(match.group(1))
+            next_num = current_num + 1
+            new_stem = re.sub(r'_v\d+$', f'_v{str(next_num).zfill(padding)}', stem)
+        else:
+            new_stem = f'{stem}_v{str(1).zfill(padding)}'
+
+        return f'{new_stem}{ext}'
 
     @staticmethod
     def scan_existing_versions(
@@ -117,7 +201,7 @@ class PathBuilder:
 
         Args:
             publish_version_parent: Directory containing version subdirectories
-                                  (e.g., .../role/script/)
+                                  (e.g., .../fx/script/)
             padding: Zero-padding width for version numbers (default: 3)
 
         Returns:

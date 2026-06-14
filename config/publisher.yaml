@@ -3,7 +3,7 @@
 # 放置在项目 config/ 目录下，自动加载
 
 # 运行模式: false=简单模式(仅文件操作), true=完整模式(含数据库)
-enable_database: false
+enable_database: true
 
 # 项目根目录（艺术家工作区路径前缀）
 project_root: /Volumes/Projects/y_pipeline_projects/Test
@@ -20,9 +20,12 @@ logging:
   file_path: logs/publisher.log
 
 # 数据库配置（仅完整模式需要）
-# database:
-#   host: localhost
-#   port: 5432
-#   database: pipeline_publisher
-#   user: pipeline
-#   password: ""
+database:
+  host: localhost
+  port: 5432
+  database: pipeline_db
+  user: frank
+  password: ""
+  min_connections: 2
+  max_connections: 10
+  connection_timeout: 30
