@@ -42,18 +42,26 @@ class MainWindow(QMainWindow):
     window_ready = Signal()
     test_completed = Signal(bool, str)
 
-    def __init__(self, controller: PublisherController):
+    def __init__(self, controller: PublisherController, parent=None):
         """Initialize main window with injected controller.
 
         Args:
             controller: PublisherController managing config, services, and user info
+            parent: Optional parent widget (e.g. hou.qt.mainWindow() for Houdini embed)
         """
-        super().__init__()
+        super().__init__(parent)
         self.controller = controller
         self.context_data = {}
 
         self.setup_ui()
         self.setup_connections()
+
+        # ── Force immediate context refresh ──
+        # ContextWidget.__init__ calls update_context() (and emits context_changed)
+        # BEFORE setup_connections() wires the signal → first emission is lost.
+        # Manual refresh ensures the signal fires after connections are live,
+        # so PublishWidget gets source_path + version populated immediately.
+        self.context_widget.manual_refresh()
 
     # ── Setup Methods ──
 

@@ -70,12 +70,14 @@ class PublishService:
         file_manager: Optional[FileManager] = None,
         path_builder: Optional[PathBuilder] = None,
         enable_database: bool = False,
-        publish_repository=None,  # Optional database repository
+        publish_repository=None,  # Optional database repository (legacy)
+        record_publish=None,      # callable(context, file_path, version, user, note)
     ):
         self.file_manager = file_manager or FileManager()
         self.path_builder = path_builder or PathBuilder()
         self.enable_database = enable_database
         self.publish_repository = publish_repository
+        self.record_publish = record_publish
         self.logger = get_logger('services.publish')
 
     def execute_publish(self, request: PublishRequest) -> PublishResult:
@@ -173,8 +175,20 @@ class PublishService:
                 f"(db={'on' if self.enable_database else 'off'})"
             )
 
-            # Step 8: Record to database (full mode only)
-            if self.enable_database and self.publish_repository:
+            # Step 8: Record to Asset Manager database
+            if self.record_publish:
+                try:
+                    self.record_publish(
+                        context=context,
+                        file_path=str(target),
+                        version=version,
+                        note=request.note,
+                    )
+                    self.logger.info(f"Asset version created for {target}")
+                except Exception as e:
+                    self.logger.error(f"Failed to record asset version: {e}")
+            elif self.enable_database and self.publish_repository:
+                # Legacy path via old PublishRepository
                 try:
                     self.publish_repository.save_publish({
                         'source_path': str(source),
@@ -187,8 +201,6 @@ class PublishService:
                     self.logger.info(f"Database record saved for {target}")
                 except Exception as e:
                     self.logger.error(f"Failed to save database record: {e}")
-                    # Don't fail the publish if DB write fails
-                    # Return success with a warning
 
             return PublishResult(
                 success=True,

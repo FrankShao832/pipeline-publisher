@@ -241,12 +241,16 @@ class ContextWidget(QWidget):
     
     def update_context(self):
         """Update context information from environment and DCC."""
-        # Get environment variables
+        # Get environment variables (PIPELINE_* with legacy SHOW/SEQ/SHOT fallback)
         self.context_data = {
-            'project': os.getenv('SHOW', 'Not set'),
-            'sequence': os.getenv('SEQ', 'Not set'),
-            'shot': os.getenv('SHOT', 'Not set'),
-            'department': os.getenv('PIPELINE_DEPARTMENT', os.getenv('ROLE', 'Not set')),
+            'project': os.getenv('PIPELINE_PROJECT',
+                        os.getenv('SHOW', 'Not set')),
+            'sequence': os.getenv('PIPELINE_SEQUENCE',
+                         os.getenv('SEQ', 'Not set')),
+            'shot': os.getenv('PIPELINE_SHOT',
+                     os.getenv('SHOT', 'Not set')),
+            'department': os.getenv('PIPELINE_DEPARTMENT',
+                          os.getenv('ROLE', 'Not set')),
             'user': self.get_user(),
             'dcc': self.detect_dcc(),
             'file_version': self.detect_file_version(),

@@ -9,12 +9,16 @@ Big-studio standard approach:
 Uses psycopg2's ThreadedConnectionPool for safe multi-thread access.
 """
 
+from __future__ import annotations
+
 import logging
-from typing import Optional
+from typing import Optional, Any
 from dataclasses import dataclass
 
-import psycopg2
-from psycopg2 import pool as pg_pool
+# psycopg2 is imported lazily inside initialize() to avoid
+# ImportError when this module is loaded in a DCC environment
+# (e.g. Houdini) that doesn't have psycopg2 installed.
+# The database is optional — PublishService works in file-only mode.
 
 from publisher.core.config.settings import DatabaseConfig
 from publisher.core.logging_config import get_logger
@@ -38,7 +42,7 @@ class DatabaseService:
         DatabaseService.close_all()
     """
 
-    _pool: Optional[pg_pool.ThreadedConnectionPool] = None
+    _pool: Optional[Any] = None  # pg_pool.ThreadedConnectionPool, imported lazily
     _config: Optional[DatabaseConfig] = None
     _logger: Optional[logging.Logger] = None
 
@@ -61,8 +65,12 @@ class DatabaseService:
             f"{config.safe_connection_string}"
         )
 
+        # Lazy import: psycopg2 may not be available in DCC environments
+        import psycopg2
+        from psycopg2 import pool as pg_pool
+
         try:
-            cls._pool = pg_pool.ThreadedConnectionPool(
+            cls._pool = pg_pool.ThreadedConnectionPool(  # type: ignore[unreachable]
                 minconn=config.min_connections,
                 maxconn=config.max_connections,
                 host=config.host,

@@ -42,7 +42,8 @@ class PublishWidget(QWidget):
 
     def __init__(self, parent: Optional[QWidget] = None,
                  publish_service: Optional[PublishService] = None,
-                 save_before_publish: bool = False):
+                 save_before_publish: bool = False,
+                 pre_publish_hook=None):
         """Initialize publish widget.
 
         Args:
@@ -51,10 +52,15 @@ class PublishWidget(QWidget):
                             If not provided, emits publish_requested signal instead.
             save_before_publish: If True, version-up the source file before publishing
                                 (standalone/Save & Publish mode).
+            pre_publish_hook: Optional callable() -> Optional[str]. Called before
+                             publish to do DCC-specific prep (e.g. save Houdini scene
+                             and version up). If it returns a string, the source path
+                             is updated to that value and used for the publish.
         """
         super().__init__(parent)
         self.publish_service = publish_service
         self.save_before_publish = save_before_publish
+        self.pre_publish_hook = pre_publish_hook
         self._current_version: Optional[str] = None
         self._last_result: Optional[PublishResult] = None
 
@@ -385,6 +391,20 @@ class PublishWidget(QWidget):
         if not source_path:
             self.set_status("✗ No source file selected", "warning")
             return
+
+        # ── Pre-publish hook (DCC-specific: save scene, version up, etc.) ──
+        if self.pre_publish_hook:
+            try:
+                new_source = self.pre_publish_hook()
+                if new_source:
+                    self.set_source_path(new_source)
+                    source_path = new_source
+            except Exception as e:
+                self.set_status(f"✗ Pre-publish failed: {e}", "error")
+                self.publish_btn.setEnabled(True)
+                self.publish_readiness_changed.emit(True)
+                self.publish_btn.setText("▶ Publish")
+                return
 
         # Build publish request data
         request_data = self.get_publish_request()

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Pipeline Publisher — Houdini Main Menu Extension.
+
+This file is discovered because pipeline_publisher.json adds
+$PIPELINE_PUBLISHER to HOUDINI_PATH via hpath.
+
+The scriptPath resolves from the same directory as this XML.
+-->
+<mainMenu>
+  <menuBar>
+    <subMenu id="pipeline_publisher_menu">
+      <label>Pipeline</label>
+
+      <scriptItem>
+        <label>Publish...</label>
+        <scriptPath>/Volumes/Dev/dev_pipeline/pipeline_publisher/scripts/python/publish_launcher.py</scriptPath>
+      </scriptItem>
+
+      <separatorItem/>
+
+    </subMenu>
+  </menuBar>
+</mainMenu>

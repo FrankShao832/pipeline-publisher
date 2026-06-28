@@ -58,11 +58,15 @@ class PublisherController:
         config = self.config_manager.get_config()
         database_repo = self._init_database(config)
 
+        # ── Asset Manager integration ────────────────────────
+        record_publish = self._init_asset_manager(config)
+
         self.publish_service = PublishService(
             file_manager=FileManager(),
             path_builder=PathBuilder(),
             enable_database=config.enable_database,
             publish_repository=database_repo,
+            record_publish=record_publish,
         )
 
     # ── Public Methods ──
@@ -105,6 +109,64 @@ class PublisherController:
             or os.getenv('PROJECT_ROOT')
             or '/Volumes/Projects/y_pipeline_projects/Test'
         )
+
+    def _init_asset_manager(self, config):
+        """Create record_publish callback that writes to Asset Manager's DB.
+
+        Adds asset_manager's source to sys.path so it can be imported.
+        Returns a callable or None if unavailable.
+        """
+        if not config.enable_database:
+            return None
+
+        try:
+            import sys as _sys
+            _am_path = '/Volumes/Dev/dev_pipeline/asset_manager/src'
+            if _am_path not in _sys.path:
+                _sys.path.insert(0, _am_path)
+
+            from asset_manager.core.services.db_asset_service import DatabaseAssetService
+            from asset_manager.dal.database import DEFAULT_DATABASE_URL
+
+            _svc = DatabaseAssetService()
+            _user_name = self.user.name
+
+            self._logger.info(
+                f"Asset Manager integration enabled → {DEFAULT_DATABASE_URL}"
+            )
+
+            def _record(context, file_path, version, note):
+                project = context.get('project', '')
+                sequence = context.get('sequence', '')
+                shot = context.get('shot', '')
+                department = context.get('department', '')
+                if not all([project, sequence, shot, department]):
+                    self._logger.warning(
+                        f"Incomplete context for asset record: {context}"
+                    )
+                    return
+
+                try:
+                    asset = _svc.ensure_asset(project, sequence, shot, department)
+                    _svc.add_version(
+                        asset_name=asset.name,
+                        file_path=file_path,
+                        created_by=_user_name,
+                        publish_note=note,
+                    )
+                    self._logger.info(
+                        f"Asset version created: {asset.name} {version}"
+                    )
+                except Exception as e:
+                    self._logger.error(f"Asset record failed: {e}")
+
+            return _record
+
+        except Exception as e:
+            self._logger.warning(
+                f"Asset Manager integration unavailable: {e}"
+            )
+            return None
 
     def cleanup(self):
         """Clean up controller resources (DCC shutdown equivalent).

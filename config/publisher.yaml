@@ -19,11 +19,11 @@ logging:
   level: DEBUG
   file_path: logs/publisher.log
 
-# 数据库配置（仅完整模式需要）
+# 数据库配置 — 指向 Asset Manager 的统一数据库
 database:
   host: localhost
   port: 5432
-  database: pipeline_db
+  database: asset_manager
   user: frank
   password: ""
   min_connections: 2
