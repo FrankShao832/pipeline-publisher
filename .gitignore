@@ -345,3 +345,5 @@ htmlcov/
 user_data/
 user_settings/
 local_settings/
+# conda temp
+condaenv.*.requirements.txt
