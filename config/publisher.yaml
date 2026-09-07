@@ -5,11 +5,11 @@
 # 运行模式: false=简单模式(仅文件操作), true=完整模式(含数据库)
 enable_database: true
 
-# 项目根目录（艺术家工作区路径前缀）
-project_root: /Volumes/Projects/y_pipeline_projects/Test
+# 项目根目录（艺术家工作区路径前缀；${DEV} = 数据卷根：darwin → /Volumes/Development，linux → /srv/share/dev）
+project_root: "${DEV}/projects/y_pipeline_projects/Test"
 
 # 发布根目录（发布目标路径前缀）
-publish_root: /Volumes/Projects/y_pipeline_publish/Test
+publish_root: "${DEV}/projects/y_pipeline_publish/Test"
 
 # 版本号位数
 version_padding: 3

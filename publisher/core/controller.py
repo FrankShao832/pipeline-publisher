@@ -9,7 +9,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Optional
 
-from publisher.core.config.settings import ConfigManager
+from publisher.core.config.settings import ConfigManager, platform_dev_root
 from publisher.core.services import PublishService
 from publisher.core.file_system.path_builder import PathBuilder
 from publisher.core.file_system.file_manager import FileManager
@@ -94,7 +94,7 @@ class PublisherController:
         return (
             config.publish_root
             or os.getenv('PUBLISH_ROOT')
-            or '/Volumes/Projects/y_pipeline_publish/Test'
+            or str(platform_dev_root() / 'projects' / 'y_pipeline_publish' / 'Test')
         )
 
     def get_project_root(self) -> str:
@@ -107,7 +107,7 @@ class PublisherController:
         return (
             config.project_root
             or os.getenv('PROJECT_ROOT')
-            or '/Volumes/Projects/y_pipeline_projects/Test'
+            or str(platform_dev_root() / 'projects' / 'y_pipeline_projects' / 'Test')
         )
 
     def _init_asset_manager(self, config):
@@ -121,7 +121,9 @@ class PublisherController:
 
         try:
             import sys as _sys
-            _am_path = '/Volumes/Dev/dev_pipeline/asset_manager/src'
+            _am_path = str(
+                platform_dev_root() / 'tools' / 'pipeline' / 'asset_manager' / 'src'
+            )
             if _am_path not in _sys.path:
                 _sys.path.insert(0, _am_path)
 

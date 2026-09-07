@@ -10,9 +10,21 @@ Supports multiple config sources with override priority:
 """
 
 import os
+import sys
 from pathlib import Path
 from typing import Optional, Dict, Any
 from dataclasses import dataclass, field
+
+
+def platform_dev_root() -> Path:
+    """Data-volume root per OS (macOS dev volume / Linux share mirror).
+
+    Matches pipeline-hatch's ${DEV} placeholder convention; publisher.yaml may
+    use ${DEV}/... and it is expanded here at load time.
+    """
+    return Path(
+        "/Volumes/Development" if sys.platform == "darwin" else "/srv/share/dev"
+    )
 
 
 @dataclass
@@ -173,9 +185,13 @@ class ConfigManager:
         if 'enable_database' in yaml_config:
             config.enable_database = bool(yaml_config['enable_database'])
         if 'publish_root' in yaml_config:
-            config.publish_root = yaml_config['publish_root']
+            config.publish_root = str(yaml_config['publish_root']).replace(
+                '${DEV}', str(platform_dev_root())
+            )
         if 'project_root' in yaml_config:
-            config.project_root = yaml_config['project_root']
+            config.project_root = str(yaml_config['project_root']).replace(
+                '${DEV}', str(platform_dev_root())
+            )
         if 'version_padding' in yaml_config:
             config.version_padding = int(yaml_config['version_padding'])
     

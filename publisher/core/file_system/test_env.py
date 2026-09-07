@@ -11,12 +11,16 @@ Priority order:
 """
 
 import os
+import sys
 from pathlib import Path
 from typing import Optional
 
+# Data-volume root per OS (macOS dev volume / Linux share mirror).
+_DEV_ROOT = Path("/Volumes/Development" if sys.platform == "darwin" else "/srv/share/dev")
+
 # Fallback defaults (only when no config and no env vars)
-FALLBACK_PROJECT_ROOT = Path("/Volumes/Projects/y_pipeline_projects/Test")
-FALLBACK_PUBLISH_ROOT = Path("/Volumes/Projects/y_pipeline_publish/Test")
+FALLBACK_PROJECT_ROOT = _DEV_ROOT / "projects" / "y_pipeline_projects" / "Test"
+FALLBACK_PUBLISH_ROOT = _DEV_ROOT / "projects" / "y_pipeline_publish" / "Test"
 
 # Shot subdirectories named after departments (not DCC names)
 TEST_DEPARTMENTS = ['anim', 'fx', 'comp']
