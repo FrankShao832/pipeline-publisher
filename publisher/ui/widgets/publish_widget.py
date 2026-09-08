@@ -374,11 +374,26 @@ class PublishWidget(QWidget):
 
     @Slot()
     def _on_browse(self):
-        """Open file browser dialog for source file selection."""
+        """Open file browser dialog for source file selection.
+
+        Start directory priority:
+            1. directory of the source path already filled in the field
+            2. $JOB (hatch launches DCCs with JOB = <seq>/<shot>/<task> workdir)
+            3. current working directory, then home as a last resort
+        """
+        current = self.get_source_path()
+        start_dir = os.path.dirname(current) if current else ""
+        if not start_dir or not os.path.isdir(start_dir):
+            start_dir = os.getenv("JOB", "")
+        if not start_dir or not os.path.isdir(start_dir):
+            start_dir = os.getcwd()
+        if not os.path.isdir(start_dir):
+            start_dir = str(Path.home())
+
         file_path, _ = QFileDialog.getOpenFileName(
             self,
             "Select Source File",
-            str(Path.home()),
+            start_dir,
             "All Files (*)",
         )
         if file_path:
