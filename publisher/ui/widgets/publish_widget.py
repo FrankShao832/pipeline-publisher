@@ -6,6 +6,7 @@ publish type selection, notes, and execution.
 """
 
 from pathlib import Path
+import os
 from typing import Optional
 
 from PySide6.QtWidgets import (
