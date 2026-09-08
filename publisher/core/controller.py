@@ -121,19 +121,24 @@ class PublisherController:
         )
 
     def _init_asset_manager(self, config):
-        """Create record_publish callback that writes to Asset Manager's DB.
+        """Create a record_publish callback writing to the Asset Manager DB.
 
-        Adds asset_manager's source to sys.path so it can be imported.
-        Returns a callable or None if unavailable.
+        Preferred path: import asset_manager in-process (works when this
+        process has sqlalchemy/psycopg2, e.g. standalone python env).
+
+        Fallback path: Houdini's bundled python has no DB libs, so we spawn
+        asset_manager's own env python (scripts/record_publish.py) as a remote
+        recorder and pass the context via env vars.
         """
         if not config.enable_database:
             return None
 
+        am_root = platform_dev_root() / 'tools' / 'pipeline' / 'asset_manager'
+
+        # ── Preferred: in-process recording ────────────────────
         try:
             import sys as _sys
-            _am_path = str(
-                platform_dev_root() / 'tools' / 'pipeline' / 'asset_manager' / 'src'
-            )
+            _am_path = str(am_root / 'src')
             if _am_path not in _sys.path:
                 _sys.path.insert(0, _am_path)
 
@@ -144,7 +149,7 @@ class PublisherController:
             _user_name = self.user.name
 
             self._logger.info(
-                f"Asset Manager integration enabled → {DEFAULT_DATABASE_URL}"
+                f"Asset Manager integration enabled (in-process) → {DEFAULT_DATABASE_URL}"
             )
 
             def _record(context, file_path, version, note):
@@ -157,7 +162,6 @@ class PublisherController:
                         f"Incomplete context for asset record: {context}"
                     )
                     return
-
                 try:
                     asset = _svc.ensure_asset(project, sequence, shot, department)
                     _svc.add_version(
@@ -174,11 +178,62 @@ class PublisherController:
 
             return _record
 
-        except Exception as e:
+        except Exception as exc:  # noqa: BLE001
             self._logger.warning(
-                f"Asset Manager integration unavailable: {e}"
+                f"Asset Manager in-process integration unavailable ({exc}); "
+                f"falling back to remote recorder subprocess."
+            )
+
+        # ── Fallback: remote recorder (asset_manager env python) ──
+        _py = am_root / 'env' / 'bin' / 'python'
+        _script = am_root / 'scripts' / 'record_publish.py'
+        if not (_py.is_file() and _script.is_file()):
+            self._logger.error(
+                f"Remote asset recorder not found ({_script}) — "
+                f"publish will NOT write the DB."
             )
             return None
+
+        import subprocess  # noqa: PLC0415
+
+        def _record(context, file_path, version, note):
+            project = context.get('project', '')
+            sequence = context.get('sequence', '')
+            shot = context.get('shot', '')
+            department = context.get('department', '')
+            if not all([project, sequence, shot, department]):
+                self._logger.warning(
+                    f"Incomplete context for asset record: {context}"
+                )
+                return
+            env = os.environ.copy()
+            env['SHOW'] = project
+            env['SEQ'] = sequence
+            env['SHOT'] = shot
+            env['DEPARTMENT'] = department
+            env['PIPELINE_DEPARTMENT'] = department
+            cmd = [str(_py), str(_script), file_path]
+            if note:
+                cmd.append(note)
+            try:
+                res = subprocess.run(cmd, env=env, capture_output=True,
+                                     text=True, timeout=90)
+                if res.returncode == 0:
+                    self._logger.info(
+                        f"Asset version recorded (remote): {res.stdout.strip()}"
+                    )
+                else:
+                    self._logger.error(
+                        f"Asset record failed (remote rc={res.returncode}): "
+                        f"{(res.stderr or res.stdout).strip()}"
+                    )
+            except Exception as exc:  # noqa: BLE001
+                self._logger.error(f"Asset record failed (remote spawn): {exc}")
+
+        self._logger.info(
+            f"Asset Manager integration enabled (remote recorder: {_script})"
+        )
+        return _record
 
     def cleanup(self):
         """Clean up controller resources (DCC shutdown equivalent).

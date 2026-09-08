@@ -121,7 +121,15 @@ class ConfigManager:
         user_config = Path.home() / ".publisher" / "config.yaml"
         if user_config.exists():
             return user_config
-        
+
+        # Package-local default (repo config/publisher.yaml). Needed when the
+        # publisher runs inside a DCC (Houdini etc.) whose cwd is not the repo,
+        # otherwise enable_database would silently fall back to False.
+        pkg_config = (Path(__file__).resolve().parent.parent.parent
+                      / "config" / "publisher.yaml")
+        if pkg_config.exists():
+            return pkg_config
+
         return None
     
     def _load_yaml_config(self) -> Dict[str, Any]:
