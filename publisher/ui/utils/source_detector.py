@@ -62,20 +62,24 @@ def detect_source_file(
 
     matches = []
     for pattern in patterns:
-        matches.extend(source_dir.glob(pattern))
+        matches.extend(f for f in source_dir.glob(pattern) if f.is_file())
 
     # Fallback: scan all files if no DCC-specific match
     if not matches:
-        matches = sorted(source_dir.iterdir())
+        matches = sorted(f for f in source_dir.iterdir() if f.is_file())
 
     if not matches:
         return None
 
-    # Extract version from filename (e.g., shot001_v001.hip → v001)
-    source_path = str(matches[0])
-    version = _extract_version(matches[0].stem)
+    # Deterministic pick: highest numeric version, then newest mtime.
+    def _key(f: Path):
+        ver = _extract_version(f.stem)
+        num = int(ver[1:]) if ver else -1
+        return (num, f.stat().st_mtime)
 
-    return (source_path, version)
+    best = max(matches, key=_key)
+    version = _extract_version(best.stem)
+    return (str(best), version)
 
 
 def _extract_version(filename_stem: str) -> Optional[str]:

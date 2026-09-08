@@ -125,7 +125,7 @@ class ConfigManager:
         # Package-local default (repo config/publisher.yaml). Needed when the
         # publisher runs inside a DCC (Houdini etc.) whose cwd is not the repo,
         # otherwise enable_database would silently fall back to False.
-        pkg_config = (Path(__file__).resolve().parent.parent.parent
+        pkg_config = (Path(__file__).resolve().parents[3]
                       / "config" / "publisher.yaml")
         if pkg_config.exists():
             return pkg_config

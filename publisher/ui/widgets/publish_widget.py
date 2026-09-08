@@ -252,6 +252,23 @@ class PublishWidget(QWidget):
 
     # ── Public Methods ──
 
+    _EXT_TO_TYPE = {
+        ".usd": PublishType.CACHE, ".usda": PublishType.CACHE,
+        ".usdc": PublishType.CACHE, ".usdz": PublishType.CACHE,
+        ".abc": PublishType.CACHE, ".bgeo": PublishType.CACHE,
+        ".hip": PublishType.SCRIPT, ".hipnc": PublishType.SCRIPT,
+        ".ma": PublishType.SCRIPT, ".nk": PublishType.SCRIPT,
+    }
+
+    def _apply_inferred_type(self, path: str) -> None:
+        """Auto-pick the publish type from the source file extension."""
+        ext = Path(path).suffix.lower()
+        inferred = self._EXT_TO_TYPE.get(ext)
+        if inferred is not None:
+            idx = self.publish_type_combo.findData(inferred.value)
+            if idx >= 0:
+                self.publish_type_combo.setCurrentIndex(idx)
+
     def set_source_path(self, path: str):
         """Set the source file path programmatically.
 
@@ -259,6 +276,7 @@ class PublishWidget(QWidget):
             path: Absolute path to the source file
         """
         self.source_path_edit.setText(path)
+        self._apply_inferred_type(path)
 
     def get_source_path(self) -> str:
         """Get the current source file path."""
