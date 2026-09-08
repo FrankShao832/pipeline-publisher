@@ -56,6 +56,16 @@ class PublisherController:
 
         # Initialize services
         config = self.config_manager.get_config()
+
+        # Log resolved publish roots + source. Inside a DCC launched by hatch the
+        # PROJECT_ROOT/PUBLISH_ROOT env vars win (env > config); standalone falls
+        # back to the publisher.yaml default (Test) on purpose.
+        self._logger.info(
+            "Publisher roots -> project: %s (env: %s) | publish: %s (env: %s)",
+            config.project_root, bool(os.getenv('PROJECT_ROOT')),
+            config.publish_root, bool(os.getenv('PUBLISH_ROOT')),
+        )
+
         database_repo = self._init_database(config)
 
         # ── Asset Manager integration ────────────────────────
