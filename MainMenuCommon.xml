@@ -1,14 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-Pipeline Publisher — Houdini Main Menu Extension (optional XML path).
+Pipeline Publisher - Houdini Main Menu Extension (primary path, restored 2026-09-08).
 
-Primary menu creation happens at session start: pipeline_hatch injects
-HOUDINI_STARTUP_PYTHON → scripts/python/startup.py, which installs the
-'Pipeline > Publish...' QMenu via publisher.dcc.houdini.menu.
+Discovery: package ~/Library/Preferences/houdini/20.5/packages/pipeline_publisher.json
+adds this repo root to HOUDINI_PATH via hpath; Houdini merges every
+MainMenuCommon.xml found on HOUDINI_MENU_PATH (= HOUDINI_PATH by default).
 
-This XML is only discovered if a Houdini package (pipeline_publisher.json
-with an hpath entry) adds the publisher root to HOUDINI_PATH. scriptPath
-expands the $PIPELINE_PUBLISHER env var set by the pipeline_hatch launcher.
+The Qt-injected menu (HOUDINI_STARTUP_PYTHON -> startup.py) was removed:
+Houdini 20.5's main menu bar is not reliably editable via findChild(QMenuBar).
 -->
 <mainMenu>
   <menuBar>
@@ -17,7 +16,7 @@ expands the $PIPELINE_PUBLISHER env var set by the pipeline_hatch launcher.
 
       <scriptItem>
         <label>Publish...</label>
-        <scriptPath>${PIPELINE_PUBLISHER}/scripts/python/publish_launcher.py</scriptPath>
+        <scriptPath>/Volumes/Development/tools/pipeline/pipeline_publisher/scripts/python/publish_launcher.py</scriptPath>
       </scriptItem>
 
       <separatorItem/>
