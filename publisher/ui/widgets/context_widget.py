@@ -310,23 +310,28 @@ class ContextWidget(QWidget):
         patterns = get_extensions_for_dcc(dcc)
 
         files = []
-        for p in patterns:
-            files.extend(dept_dir.glob(p))
+        for pat in patterns:
+            files.extend(f for f in dept_dir.glob(pat) if f.is_file())
         if not files:
-            files = list(dept_dir.iterdir())
-        
+            files = [f for f in dept_dir.iterdir() if f.is_file()]
+
         if not files:
             return 'N/A'
-        
-        # Extract version from first matching filename
-        # Pattern: _v001, _v002, etc. (case insensitive)
-        version_match = re.search(r'_v(\d+)', files[0].stem, re.IGNORECASE)
-        if version_match:
-            padding = len(version_match.group(1))
-            num = int(version_match.group(1))
-            return f"v{str(num).zfill(padding)}"
-        
-        return 'N/A'
+
+        # Highest numeric version wins (glob/iterdir order is not sorted).
+        best_num = -1
+        best_pad = 3
+        for f in files:
+            version_match = re.search(r'_v(\d+)', f.stem, re.IGNORECASE)
+            if version_match:
+                num = int(version_match.group(1))
+                if num > best_num:
+                    best_num = num
+                    best_pad = len(version_match.group(1))
+        if best_num < 0:
+            return 'N/A'
+        return f"v{str(best_num).zfill(best_pad)}"
+
     
     def update_ui(self):
         """Update UI labels with current context data."""

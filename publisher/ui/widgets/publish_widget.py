@@ -269,14 +269,25 @@ class PublishWidget(QWidget):
             if idx >= 0:
                 self.publish_type_combo.setCurrentIndex(idx)
 
+    @staticmethod
+    def _version_from_name(path: str):
+        """Extract trailing _vNNN version token from a filename."""
+        import re
+        m = re.search(r'_v(\d+)', Path(path).stem, re.IGNORECASE)
+        if not m:
+            return None
+        num = int(m.group(1))
+        return f"v{str(num).zfill(len(m.group(1)))}"
+
     def set_source_path(self, path: str):
-        """Set the source file path programmatically.
+        """Set the source file path programmatically (refreshes type + version).
 
         Args:
             path: Absolute path to the source file
         """
         self.source_path_edit.setText(path)
         self._apply_inferred_type(path)
+        self.set_version(self._version_from_name(path))
 
     def get_source_path(self) -> str:
         """Get the current source file path."""
@@ -416,7 +427,7 @@ class PublishWidget(QWidget):
             "All Files (*)",
         )
         if file_path:
-            self.source_path_edit.setText(file_path)
+            self.set_source_path(file_path)
 
     @Slot()
     def _on_publish_clicked(self):
