@@ -1,11 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-Pipeline Publisher — Houdini Main Menu Extension.
+Pipeline Publisher — Houdini Main Menu Extension (optional XML path).
 
-This file is discovered because pipeline_publisher.json adds
-$PIPELINE_PUBLISHER to HOUDINI_PATH via hpath.
+Primary menu creation happens at session start: pipeline_hatch injects
+HOUDINI_STARTUP_PYTHON → scripts/python/startup.py, which installs the
+'Pipeline > Publish...' QMenu via publisher.dcc.houdini.menu.
 
-The scriptPath resolves from the same directory as this XML.
+This XML is only discovered if a Houdini package (pipeline_publisher.json
+with an hpath entry) adds the publisher root to HOUDINI_PATH. scriptPath
+expands the $PIPELINE_PUBLISHER env var set by the pipeline_hatch launcher.
 -->
 <mainMenu>
   <menuBar>
@@ -14,7 +17,7 @@ The scriptPath resolves from the same directory as this XML.
 
       <scriptItem>
         <label>Publish...</label>
-        <scriptPath>/Volumes/Dev/dev_pipeline/pipeline_publisher/scripts/python/publish_launcher.py</scriptPath>
+        <scriptPath>${PIPELINE_PUBLISHER}/scripts/python/publish_launcher.py</scriptPath>
       </scriptItem>
 
       <separatorItem/>
