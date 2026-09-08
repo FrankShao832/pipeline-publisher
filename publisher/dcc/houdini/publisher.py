@@ -196,8 +196,21 @@ class HoudiniPublisher:
         window.setWindowTitle("Pipeline Publisher - Houdini")
 
         # ── Wire up Houdini pre-publish hook ──
-        # Before each publish: save current scene → version up → publish new version
-        window.publish_widget.pre_publish_hook = cls._houdini_pre_publish
+        # Version-up the live scene only when the publish source IS the current
+        # session hip. Publishing an external file (e.g. an exported USD cache)
+        # must not hijack the chosen source.
+        def _pre_publish_guarded():
+            try:
+                import hou
+                src = window.publish_widget.get_source_path()
+                if src and os.path.abspath(src) != os.path.abspath(hou.hipFile.path()):
+                    print("[Pipeline Publisher] External source — skipping scene version-up.")
+                    return None
+            except Exception as exc:  # noqa: BLE001
+                print(f"[Pipeline Publisher] Pre-publish guard failed: {exc}")
+            return cls._houdini_pre_publish()
+
+        window.publish_widget.pre_publish_hook = _pre_publish_guarded
 
         window.show()
 
