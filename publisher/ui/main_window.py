@@ -52,6 +52,10 @@ class MainWindow(QMainWindow):
         super().__init__(parent)
         self.controller = controller
         self.context_data = {}
+        # Auto-detect bookkeeping: only fill the source field when the user has
+        # not manually picked a file (or the project context really changed).
+        self._context_project: str | None = None
+        self._last_auto_source: str = ""
 
         self.setup_ui()
         self.setup_connections()
@@ -149,16 +153,31 @@ class MainWindow(QMainWindow):
 
         self.context_data = context
 
-        # Auto-detect source file from work directory
+        # Auto-detect source file from the work directory, but never clobber a
+        # file the user picked manually via Browse on a repeated context refresh.
         project_root = self.controller.get_project_root()
+        project = context.get('project', 'Not set')
+        project_changed = (self._context_project != project)
         result = detect_source_file(context, project_root)
-        if result:
-            source_path, version = result
-            current_source = self.publish_widget.get_source_path()
-            if current_source != source_path:
-                self.publish_widget.set_source_path(source_path)
-                if version:
-                    self.publish_widget.set_version(version)
+        source_path, version = (result if result else (None, None))
+
+        current_source = self.publish_widget.get_source_path()
+        if source_path:
+            still_shows_auto = (
+                bool(current_source)
+                and self._last_auto_source == current_source
+            )
+            if (
+                project_changed          # real project switch → re-detect
+                or not current_source    # nothing chosen yet → fill
+                or still_shows_auto      # never touched manually → refresh
+            ):
+                if current_source != source_path:
+                    self.publish_widget.set_source_path(source_path)
+                    if version:
+                        self.publish_widget.set_version(version)
+        self._last_auto_source = source_path or ""
+        self._context_project = project
 
     @Slot(str, str)
     def _on_context_status(self, message: str, status_type: str):
