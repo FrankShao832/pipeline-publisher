@@ -1,7 +1,15 @@
 """
-User interface for Pipeline Publisher.
+UI components for Pipeline Publisher.
 
-PySide6-based GUI components.
+Provides both standalone and DCC-embedded UI components.
 """
 
-__all__ = ['main_window', 'settings_window']
+from .main_window import MainWindow
+from .widgets import ContextWidget
+from .utils import ui_utils
+
+__all__ = [
+    'MainWindow',
+    'ContextWidget',
+    'ui_utils',
+]

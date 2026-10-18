@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Pipeline Publisher - Houdini Main Menu Extension (primary path, restored 2026-09-08).
+
+Discovery: package ~/Library/Preferences/houdini/20.5/packages/pipeline_publisher.json
+adds this repo root to HOUDINI_PATH via hpath; Houdini merges every
+MainMenuCommon.xml found on HOUDINI_MENU_PATH (= HOUDINI_PATH by default).
+
+The Qt-injected menu (HOUDINI_STARTUP_PYTHON -> startup.py) was removed:
+Houdini 20.5's main menu bar is not reliably editable via findChild(QMenuBar).
+-->
+<mainMenu>
+  <menuBar>
+    <subMenu id="pipeline_publisher_menu">
+      <label>Pipeline</label>
+
+      <scriptItem>
+        <label>Publish...</label>
+        <scriptPath>/Volumes/Development/tools/pipeline/pipeline_publisher/scripts/python/publish_launcher.py</scriptPath>
+      </scriptItem>
+
+      <separatorItem/>
+
+    </subMenu>
+  </menuBar>
+</mainMenu>

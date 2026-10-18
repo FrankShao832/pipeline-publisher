@@ -1,0 +1,12 @@
+# Pipeline Publisher 环境（从原 env pip list 反推）— conda env create -p ./env -f environment.yml
+name: pipeline_publisher
+channels: [conda-forge]
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+      - pyside6>=6.5.0
+      - sqlalchemy>=2.0.0
+      - psycopg2-binary>=2.9.0
+      - pyyaml>=6.0
+      - pydantic>=2.0
