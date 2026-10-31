@@ -540,6 +540,8 @@ class PublishWidget(QWidget):
                     'sequence': context_data.get('sequence', 'Not set'),
                     'shot': context_data.get('shot', 'Not set'),
                     'department': context_data.get('department', 'Not set').lower(),
+                    'dcc': context_data.get('dcc', ''),
+                    'project_root': context_data.get('project_root', 'Not set'),
                     'publish_root': context_data.get('publish_root', 'Not set'),
                 }
             parent = parent.parent()
@@ -551,6 +553,8 @@ class PublishWidget(QWidget):
             'sequence': os.getenv('SEQ', 'Not set'),
             'shot': os.getenv('SHOT', 'Not set'),
             'department': os.getenv('PIPELINE_DEPARTMENT', os.getenv('ROLE', 'Not set')).lower(),
+            'dcc': os.getenv('PIPELINE_DCC', ''),
+            'project_root': os.getenv('PROJECT_ROOT', 'Not set'),
             'publish_root': os.getenv('PUBLISH_ROOT', 'Not set'),
         }
 

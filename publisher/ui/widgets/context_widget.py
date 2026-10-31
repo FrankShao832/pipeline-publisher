@@ -284,10 +284,11 @@ class ContextWidget(QWidget):
     def detect_file_version(self) -> str:
         """
         Detect file version from source filename in the project workspace.
-        
-        Looks for source files in {project_root}/{project}/{seq}/{shot}/{department}/
-        and extracts version from filename pattern like _v001, _v002, etc.
-        
+
+        Resolves the work directory department-first
+        (``<shot>/<dept>/<dcc>`` -> ``<shot>/<dept>`` -> ``<shot>/<dcc>``) and
+        extracts version from filename pattern like _v001, _v002, etc.
+
         Returns:
             Version string (e.g., 'v001') or 'N/A' if not found.
         """
@@ -299,14 +300,20 @@ class ContextWidget(QWidget):
         
         if not all([project, sequence, shot, department, project_root]):
             return 'N/A'
-        
-        dept_dir = Path(project_root) / project / sequence / shot / department
-        if not dept_dir.exists():
-            return 'N/A'
-        
-        # Determine DCC from department and get extension patterns
+
         from publisher.core.constants import get_dcc_for_department, get_extensions_for_dcc
-        dcc = get_dcc_for_department(department)
+        from publisher.core.file_system.department_path import (
+            normalize_dcc,
+            resolve_source_dir,
+        )
+        dcc = normalize_dcc(self.context_data.get('dcc')) or get_dcc_for_department(department)
+        resolved = resolve_source_dir(
+            project_root, project, sequence, shot, department, dcc,
+        )
+        if resolved is None:
+            return 'N/A'
+        dept_dir = resolved.path
+
         patterns = get_extensions_for_dcc(dcc)
 
         files = []
