@@ -157,13 +157,15 @@ class PublisherController:
                 sequence = context.get('sequence', '')
                 shot = context.get('shot', '')
                 department = context.get('department', '')
+                dcc = context.get('dcc', '')
                 if not all([project, sequence, shot, department]):
                     self._logger.warning(
                         f"Incomplete context for asset record: {context}"
                     )
                     return
                 try:
-                    asset = _svc.ensure_asset(project, sequence, shot, department)
+                    asset = _svc.ensure_asset(project, sequence, shot, department,
+                                              dcc=dcc)
                     _svc.add_version(
                         asset_name=asset.name,
                         file_path=file_path,
@@ -212,6 +214,11 @@ class PublisherController:
             env['SHOT'] = shot
             env['DEPARTMENT'] = department
             env['PIPELINE_DEPARTMENT'] = department
+            # Provenance: the recorder stores this as assets.dcc_type. Empty
+            # is tolerated (older callers), but the publish knows its DCC.
+            dcc = context.get('dcc', '')
+            env['DCC'] = dcc
+            env['PIPELINE_DCC'] = dcc
             cmd = [str(_py), str(_script), file_path]
             if note:
                 cmd.append(note)
