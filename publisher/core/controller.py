@@ -104,7 +104,9 @@ class PublisherController:
         return (
             config.publish_root
             or os.getenv('PUBLISH_ROOT')
-            or str(platform_dev_root() / 'projects' / 'y_pipeline_publish' / 'Test')
+            # Roots are the parent of the shows: the path builders append
+            # <project>/<sequence>/<shot> themselves.
+            or str(platform_dev_root() / 'projects' / 'y_pipeline_publish')
         )
 
     def get_project_root(self) -> str:
@@ -117,7 +119,7 @@ class PublisherController:
         return (
             config.project_root
             or os.getenv('PROJECT_ROOT')
-            or str(platform_dev_root() / 'projects' / 'y_pipeline_projects' / 'Test')
+            or str(platform_dev_root() / 'projects' / 'y_pipeline_projects')
         )
 
     def _init_asset_manager(self, config):
