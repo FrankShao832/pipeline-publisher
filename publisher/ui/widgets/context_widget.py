@@ -35,6 +35,9 @@ class ContextWidget(QWidget):
         self.user_role = user_role
         self.is_developer = user_role.lower() in ('admin', 'developer', 'td')
         self.context_data = {}
+        # where the current context came from: env / config / none
+        self.context_source = 'none'
+        self._config = None
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self.update_context)
         self.update_timer.start(10000)
@@ -240,24 +243,40 @@ class ContextWidget(QWidget):
         return status_frame
     
     def update_context(self):
-        """Update context information from environment and DCC."""
-        # Get environment variables (PIPELINE_* with legacy SHOW/SEQ/SHOT fallback)
+        """Update context information from environment and DCC.
+
+        A standalone session has no launcher to inject ``PIPELINE_*``
+        variables, so the resolver falls back to
+        ``config/publisher.yaml: standalone_context``. The environment always
+        wins — see :mod:`publisher.core.context_resolver`.
+        """
+        from publisher.core.context_resolver import NOT_SET, resolve_context
+
+        resolved = resolve_context(config=self._load_config())
+        self.context_source = resolved.pop('source', 'none')
+
+        # Outside a DCC the detector reports "Standalone"; the configured
+        # context knows which application the work is meant for, and that is
+        # what provenance should record.
+        dcc = self.detect_dcc()
+        if dcc.strip().lower() in ('', 'standalone', 'unknown') and resolved['dcc'] != NOT_SET:
+            dcc = resolved['dcc']
+
         self.context_data = {
-            'project': os.getenv('PIPELINE_PROJECT',
-                        os.getenv('SHOW', 'Not set')),
-            'sequence': os.getenv('PIPELINE_SEQUENCE',
-                         os.getenv('SEQ', 'Not set')),
-            'shot': os.getenv('PIPELINE_SHOT',
-                     os.getenv('SHOT', 'Not set')),
-            'department': os.getenv('PIPELINE_DEPARTMENT',
-                          os.getenv('ROLE', 'Not set')),
+            'project': resolved['project'],
+            'sequence': resolved['sequence'],
+            'shot': resolved['shot'],
+            'department': resolved['department'],
             'user': self.get_user(),
-            'dcc': self.detect_dcc(),
-            'file_version': self.detect_file_version(),
-            'project_root': os.getenv('PROJECT_ROOT', 'Not set'),
-            'publish_root': os.getenv('PUBLISH_ROOT', 'Not set'),
+            'dcc': dcc,
+            'file_version': 'N/A',
+            'project_root': resolved['project_root'],
+            'publish_root': resolved['publish_root'],
         }
-        
+
+        # Needs the fresh context_data above to resolve the work directory.
+        self.context_data['file_version'] = self.detect_file_version()
+
         # Update UI
         self.update_ui()
         
@@ -266,6 +285,18 @@ class ContextWidget(QWidget):
         
         # Validate context
         self.validate_context()
+
+    def _load_config(self):
+        """Load the publisher config once; failures must never break the UI."""
+        if self._config is not None:
+            return self._config if self._config is not False else None
+        try:
+            from publisher.core.config.settings import ConfigManager
+
+            self._config = ConfigManager().get_config()
+        except Exception:  # noqa: BLE001 - a broken config degrades to env-only
+            self._config = False
+        return self._config if self._config is not False else None
     
     def get_user(self) -> str:
         """Get current username."""
@@ -296,8 +327,11 @@ class ContextWidget(QWidget):
         sequence = self.context_data.get('sequence', '')
         shot = self.context_data.get('shot', '')
         department = self.context_data.get('department', '')
-        project_root = os.getenv('PROJECT_ROOT', '')
-        
+        project_root = self.context_data.get('project_root', '')
+
+        if project_root == 'Not set':
+            project_root = ''
+
         if not all([project, sequence, shot, department, project_root]):
             return 'N/A'
 
@@ -361,7 +395,14 @@ class ContextWidget(QWidget):
         
         if not missing_fields:
             # All required fields present
-            self.status_text.setText("✓ Context complete")
+            # "config" = no launcher context, values came from publisher.yaml
+            # (standalone session) — worth saying out loud, otherwise the panel
+            # looks identical to a properly launched one.
+            self.status_text.setText(
+                "✓ Context complete · standalone (config)"
+                if self.context_source == 'config'
+                else "✓ Context complete"
+            )
             self.status_text.setStyleSheet("""
                 QLabel {
                     font-size: 16pt;
