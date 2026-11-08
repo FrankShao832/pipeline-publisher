@@ -18,9 +18,16 @@ from typing import Optional
 # Data-volume root per OS (macOS dev volume / Linux share mirror).
 _DEV_ROOT = Path("/Volumes/Development" if sys.platform == "darwin" else "/srv/share/dev")
 
-# Fallback defaults (only when no config and no env vars)
-FALLBACK_PROJECT_ROOT = _DEV_ROOT / "projects" / "y_pipeline_projects" / "Test"
-FALLBACK_PUBLISH_ROOT = _DEV_ROOT / "projects" / "y_pipeline_publish" / "Test"
+# Fallback defaults (only when no config and no env vars).
+# Roots are the parent of the shows: the path builders append
+# <project>/<sequence>/<shot> themselves.
+FALLBACK_PROJECT_ROOT = _DEV_ROOT / "projects" / "y_pipeline_projects"
+FALLBACK_PUBLISH_ROOT = _DEV_ROOT / "projects" / "y_pipeline_publish"
+
+#: Dedicated sandbox show for dev clicks ("Init env" in DevTools).
+#: The old code wrote into ``<root>/test_project``, which is a *real* show on
+#: the dev volume — a dev button must never leave droppings in shipped data.
+SANDBOX_SHOW = '_publisher_sandbox'
 
 # Shot subdirectories named after departments (not DCC names)
 TEST_DEPARTMENTS = ['anim', 'fx', 'comp']
@@ -35,8 +42,10 @@ def ensure_test_environment(
     """
     Ensure test directories exist and set default environment variables.
 
-    Creates source files and publish directories for each department.
-    Only creates files if they don't already exist.
+    Creates source files and publish directories for each department inside
+    :data:`SANDBOX_SHOW` — a show that exists only for this button, so a dev
+    click can never write into a real show. Only creates files if they don't
+    already exist.
 
     Args:
         project_root: Project root path. Uses FALLBACK_PROJECT_ROOT if None.
@@ -58,7 +67,7 @@ def ensure_test_environment(
     }
 
     for department, (filename, content) in dept_files.items():
-        source_dir = project_root / 'test_project' / 'seq001' / 'shot001' / department
+        source_dir = project_root / SANDBOX_SHOW / 'seq001' / 'shot001' / department
         source_file = source_dir / filename
 
         if not source_file.exists():
@@ -71,7 +80,7 @@ def ensure_test_environment(
         for publish_type in PUBLISH_TYPES:
             version_dir = (
                 publish_root
-                / 'test_project'
+                / SANDBOX_SHOW
                 / 'seq001'
                 / 'shot001'
                 / department
@@ -84,7 +93,7 @@ def ensure_test_environment(
 
     # --- Set environment variables if not already set ---
     env_defaults = {
-        'SHOW': 'test_project',
+        'SHOW': SANDBOX_SHOW,
         'SEQ': 'seq001',
         'SHOT': 'shot001',
         'PIPELINE_DEPARTMENT': 'fx',

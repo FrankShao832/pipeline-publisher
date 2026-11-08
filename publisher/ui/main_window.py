@@ -20,7 +20,7 @@ from .widgets.log_widget import LogWidget
 from .widgets.dev_tools_widget import DevToolsWidget
 from publisher.core.controller import PublisherController
 from publisher.core.version import get_version_info
-from publisher.core.file_system.test_env import ensure_test_environment
+from publisher.core.file_system.test_env import SANDBOX_SHOW, ensure_test_environment
 from .utils.ui_utils import center_window_on_screen
 from .utils.source_detector import detect_source_file
 from .resources.styles import MAIN_WINDOW_STYLE
@@ -246,7 +246,10 @@ Log level:       {config.logging.level}
         ensure_test_environment(project_root, publish_root)
         self.context_widget.manual_refresh()
 
-        self.log_widget.log_message("Test environment initialized", "success")
+        self.log_widget.log_message(
+            f"Test environment initialized (sandbox show: {SANDBOX_SHOW})",
+            "success",
+        )
         self.dev_tools.update_status("Test environment ready", "success")
 
     @Slot()
