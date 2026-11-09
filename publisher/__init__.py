@@ -5,5 +5,5 @@ This package provides a unified publishing interface for Maya, Houdini, and Nuke
 with PostgreSQL backend and modern PySide6 UI.
 """
 
-__version__ = "2.1.1"
+__version__ = "2.2.0"
 __author__ = "Frank"
