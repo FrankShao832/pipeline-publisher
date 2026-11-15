@@ -12,11 +12,15 @@ from typing import Optional
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
     QPushButton, QLabel, QComboBox, QTextEdit, QLineEdit,
-    QFileDialog, QFrame, QGroupBox,
+    QFileDialog, QFrame, QGroupBox, QMessageBox,
 )
 from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtGui import QFont
 
+from publisher.core.file_system.cache_lookup import (
+    is_cache_file,
+    lookup_cache_source,
+)
 from publisher.core.models.enums import PublishType
 from publisher.core.services.publish_service import PublishService, PublishRequest, PublishResult
 
@@ -78,7 +82,7 @@ class PublishWidget(QWidget):
         header = QLabel("Publish")
         header.setStyleSheet("""
             QLabel {
-                font-size: 20pt;
+                font-size: 20px;
                 font-weight: bold;
                 color: #0078d4;
                 background-color: transparent;
@@ -106,13 +110,13 @@ class PublishWidget(QWidget):
                 color: #0078d4;
             }
             QGroupBox QLabel {
-                font-size: 14pt;
+                font-size: 14px;
                 background-color: transparent;
                 border: none;
                 padding: 2px 4px;
             }
             QLineEdit, QComboBox, QTextEdit {
-                font-size: 14pt;
+                font-size: 14px;
                 background-color: #2b2b2b;
                 border: 1px solid #444444;
                 border-radius: 4px;
@@ -144,7 +148,7 @@ class PublishWidget(QWidget):
         source_layout.addWidget(self.source_path_edit)
 
         self.browse_btn = QPushButton("Browse")
-        self.browse_btn.setFixedWidth(100)
+        self.browse_btn.setMinimumWidth(100)
         self.browse_btn.setStyleSheet("""
             QPushButton {
                 background-color: #4a4a4a;
@@ -152,7 +156,7 @@ class PublishWidget(QWidget):
                 border: 1px solid #555555;
                 border-radius: 4px;
                 padding: 4px 12px;
-                font-size: 13pt;
+                font-size: 13px;
                 font-weight: bold;
                 min-height: 28px;
             }
@@ -178,12 +182,18 @@ class PublishWidget(QWidget):
             self.publish_type_combo.setCurrentIndex(script_idx)
         form_layout.addRow("Type:", self.publish_type_combo)
 
+        # Choosing "Cache" while the source is still the work file has to be
+        # resolved (or refused) — see _on_publish_type_changed. These two keep
+        # that dance from recursing when we set the combo ourselves.
+        self._last_publish_type = PublishType.SCRIPT
+        self._suppress_type_change = False
+
         # Version display (read-only)
         self.version_label = QLabel("—")
         self.version_label.setStyleSheet("""
             QLabel {
                 font-weight: bold;
-                font-size: 14pt;
+                font-size: 14px;
                 color: #4caf50;
                 background-color: transparent;
                 border: none;
@@ -203,7 +213,7 @@ class PublishWidget(QWidget):
         self.status_label.setStyleSheet("""
             QLabel {
                 font-weight: normal;
-                font-size: 14pt;
+                font-size: 14px;
                 color: #cccccc;
                 background-color: transparent;
                 border: none;
@@ -224,7 +234,7 @@ class PublishWidget(QWidget):
                 border: none;
                 border-radius: 4px;
                 padding: 8px 16px;
-                font-size: 21pt;
+                font-size: 21px;
                 font-weight: bold;
                 min-height: 36px;
             }
@@ -249,6 +259,9 @@ class PublishWidget(QWidget):
         self.browse_btn.clicked.connect(self._on_browse)
         self.publish_btn.clicked.connect(self._on_publish_clicked)
         self.source_path_edit.textChanged.connect(self._on_source_changed)
+        self.publish_type_combo.currentIndexChanged.connect(
+            self._on_publish_type_changed
+        )
 
     # ── Public Methods ──
 
@@ -268,6 +281,97 @@ class PublishWidget(QWidget):
             idx = self.publish_type_combo.findData(inferred.value)
             if idx >= 0:
                 self.publish_type_combo.setCurrentIndex(idx)
+
+    @Slot(int)
+    def _on_publish_type_changed(self, index: int) -> None:
+        """Resolve (or refuse) a Cache publish chosen over a work file.
+
+        The publisher copies files and never converts them, so selecting
+        ``Cache`` while the source is still ``<name>.hip`` can only produce a
+        ``.hip`` inside a cache folder. Instead of silently copying the wrong
+        file, look for the exported cache beside the work file:
+
+        * nothing there -> say so, bounce the combo back to the previous type;
+        * something there -> name it, show when it was created, and let the
+          artist confirm before the source is switched over.
+
+        The DCC still owns the export. This only decides *which file to copy*.
+        """
+        if self._suppress_type_change:
+            return
+
+        publish_type = self.get_publish_type()
+
+        if publish_type is not PublishType.CACHE:
+            self._last_publish_type = publish_type
+            return
+
+        source_path = self.get_source_path()
+        if source_path and is_cache_file(source_path):
+            # Already pointing at a cache file — nothing to resolve.
+            self._last_publish_type = publish_type
+            return
+
+        lookup = lookup_cache_source(source_path)
+        if lookup is None:
+            self._revert_publish_type()
+            self.set_status("✗ No source file to look a cache up beside", "warning")
+            return
+
+        if not lookup.found:
+            self._revert_publish_type()
+            self.set_status(
+                f"✗ No USD in {lookup.cache_dir} — export it first", "warning"
+            )
+            QMessageBox.information(
+                self,
+                "Cache publish",
+                f"No USD found in:\n{lookup.cache_dir}\n\n"
+                "Export the cache from the DCC first, then select Cache again.",
+            )
+            return
+
+        candidate = lookup.candidate
+        stale_note = (
+            "\n\n⚠ This cache is older than the work file — re-export before "
+            "publishing if the scene has changed."
+            if candidate.is_older_than(source_path)
+            else ""
+        )
+        answer = QMessageBox.question(
+            self,
+            "Cache publish",
+            f"Publish this cache file?\n\n"
+            f"File: {candidate.filename}\n"
+            f"Created: {candidate.created_text}\n"
+            f"Folder: {lookup.cache_dir}{stale_note}",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            self._revert_publish_type()
+            self.set_status("Cache publish cancelled — source left unchanged", "info")
+            return
+
+        # set_source_path refreshes the version and re-applies the type
+        # inference; that second pass is a no-op because the source is now a
+        # cache file (see the early return above).
+        self.set_source_path(str(candidate.path))
+        self._last_publish_type = PublishType.CACHE
+        self.set_status(
+            f"✓ Cache source: {candidate.filename} ({candidate.created_text})",
+            "success",
+        )
+
+    def _revert_publish_type(self) -> None:
+        """Put the type combo back where it was, without re-entering the handler."""
+        self._suppress_type_change = True
+        try:
+            idx = self.publish_type_combo.findData(self._last_publish_type.value)
+            if idx >= 0:
+                self.publish_type_combo.setCurrentIndex(idx)
+        finally:
+            self._suppress_type_change = False
 
     @staticmethod
     def _version_from_name(path: str):
@@ -316,7 +420,7 @@ class PublishWidget(QWidget):
             self.version_label.setStyleSheet("""
                 QLabel {
                     font-weight: bold;
-                    font-size: 14pt;
+                    font-size: 14px;
                     color: #4caf50;
                     background-color: transparent;
                     border: none;
@@ -328,7 +432,7 @@ class PublishWidget(QWidget):
             self.version_label.setStyleSheet("""
                 QLabel {
                     font-weight: normal;
-                    font-size: 14pt;
+                    font-size: 14px;
                     color: #888888;
                     background-color: transparent;
                     border: none;
@@ -353,7 +457,7 @@ class PublishWidget(QWidget):
         self.status_label.setStyleSheet(f"""
             QLabel {{
                 font-weight: normal;
-                font-size: 14pt;
+                font-size: 14px;
                 color: {color};
                 background-color: transparent;
                 border: none;
@@ -540,6 +644,8 @@ class PublishWidget(QWidget):
                     'sequence': context_data.get('sequence', 'Not set'),
                     'shot': context_data.get('shot', 'Not set'),
                     'department': context_data.get('department', 'Not set').lower(),
+                    'dcc': context_data.get('dcc', ''),
+                    'project_root': context_data.get('project_root', 'Not set'),
                     'publish_root': context_data.get('publish_root', 'Not set'),
                 }
             parent = parent.parent()
@@ -551,6 +657,8 @@ class PublishWidget(QWidget):
             'sequence': os.getenv('SEQ', 'Not set'),
             'shot': os.getenv('SHOT', 'Not set'),
             'department': os.getenv('PIPELINE_DEPARTMENT', os.getenv('ROLE', 'Not set')).lower(),
+            'dcc': os.getenv('PIPELINE_DCC', ''),
+            'project_root': os.getenv('PROJECT_ROOT', 'Not set'),
             'publish_root': os.getenv('PUBLISH_ROOT', 'Not set'),
         }
 

@@ -69,7 +69,7 @@ class LogWidget(QWidget):
         # Log title
         log_title = QLabel("Activity Log")
         log_title.setStyleSheet(
-            "color: #0078d4; font-weight: bold; font-size: 20pt;"
+            "color: #0078d4; font-weight: bold; font-size: 20px;"
             "background: transparent; border: none;"
         )
         log_layout.addWidget(log_title)

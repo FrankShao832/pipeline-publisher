@@ -16,11 +16,17 @@ Publish flow:
 """
 
 import logging
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Dict, Any
 
 from publisher.core.file_system.path_builder import PathBuilder
+from publisher.core.file_system.department_path import (
+    is_dcc_token,
+    publish_stem_for_source,
+    split_stem,
+)
 from publisher.core.file_system.file_manager import FileManager
 from publisher.core.models.enums import PublishType
 from publisher.core.logging_config import get_logger
@@ -118,9 +124,36 @@ class PublishService:
             publish_root = context['publish_root']
             publish_type = request.publish_type.value
 
-            # The type directory (e.g., .../fx/script/) contains version subdirs
-            version_parent = (
-                Path(publish_root) / project / sequence / shot / department / publish_type
+            # The publish tree mirrors the work tree it came from:
+            # <dept> when the department holds a single app, <dept>/<dcc> when
+            # the work dir is nested. The department slot is never filled with
+            # a dcc name — that was the old leak.
+            dept_slot, dcc_slot = department, None
+            if is_dcc_token(department):
+                self.logger.warning(
+                    f"Department slot holds a DCC name ({department!r}); "
+                    "publishing under it recreates the old dcc-segment tree. "
+                    "Set PIPELINE_DEPARTMENT to the owning department instead."
+                )
+            project_root = context.get('project_root') or os.getenv('PROJECT_ROOT', '')
+            if project_root:
+                stem = publish_stem_for_source(
+                    source, project_root, project, sequence, shot, department,
+                )
+                dept_slot, dcc_slot = split_stem(stem)
+
+            # The type directory (e.g., .../fx/houdini/script/) holds the
+            # version subdirs, so the counter is scoped by
+            # (department[, dcc], publish type) and cannot collide across
+            # departments.
+            version_parent = self.path_builder.build_publish_type_dir(
+                publish_root=publish_root,
+                project=project,
+                sequence=sequence,
+                shot=shot,
+                department=dept_slot,
+                publish_type=publish_type,
+                dcc=dcc_slot,
             )
 
             version = self.path_builder.next_version(version_parent)
@@ -154,10 +187,11 @@ class PublishService:
                 project=project,
                 sequence=sequence,
                 shot=shot,
-                department=department,
+                department=dept_slot,
                 publish_type=publish_type,
                 version=version,
                 filename=pub_filename,
+                dcc=dcc_slot,
             )
 
             # Step 5: Check duplicate (simple mode: skip if already exists?)

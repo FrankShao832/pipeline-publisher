@@ -19,6 +19,10 @@ from publisher.core.constants import (
     get_extensions_for_dcc,
     get_dcc_for_department,
 )
+from publisher.core.file_system.department_path import (
+    normalize_dcc,
+    resolve_source_dir,
+)
 
 
 def detect_source_file(
@@ -27,12 +31,15 @@ def detect_source_file(
 ) -> Optional[Tuple[str, str]]:
     """Scan work directory for a source file matching current pipeline context.
 
-    Constructs the path {project_root}/{project}/{seq}/{shot}/{department}/ and
-    looks for DCC-specific files using the department→DCC mapping.
+    The work directory is resolved department-first through the three shapes
+    ``<shot>/<dept>/<dcc>`` -> ``<shot>/<dept>`` -> ``<shot>/<dcc>`` (see
+    publisher.core.file_system.department_path), so a shot whose work lives in
+    ``fx/houdini`` is found as reliably as one that lives in ``comp``.
 
     Args:
         context: Pipeline context dict with keys:
                  'project', 'sequence', 'shot', 'department'
+                 plus optional 'dcc' (used to disambiguate multi-app departments)
         project_root: Optional project root path (falls back to env var
                       PROJECT_ROOT if not provided)
 
@@ -52,12 +59,15 @@ def detect_source_file(
     if not all([project, sequence, shot, department, project_root]):
         return None
 
-    source_dir = Path(project_root) / project / sequence / shot / department
-    if not source_dir.exists():
+    # Explicit dcc wins; otherwise fall back to the department's usual app.
+    dcc = normalize_dcc(context.get('dcc')) or get_dcc_for_department(department)
+    resolved = resolve_source_dir(
+        project_root, project, sequence, shot, department, dcc,
+    )
+    if resolved is None:
         return None
+    source_dir = resolved.path
 
-    # Determine likely DCC from department, then get extension patterns
-    dcc = get_dcc_for_department(department)
     patterns = get_extensions_for_dcc(dcc)
 
     matches = []

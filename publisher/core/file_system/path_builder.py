@@ -4,10 +4,14 @@ Path construction utilities for Pipeline Publisher.
 Builds consistent pipeline paths for source (work) and publish directories.
 
 Path patterns:
-  Work:     {project_root}/{project}/{seq}/{shot}/{department}/{filename}
-  Publish:  {publish_root}/{project}/{seq}/{shot}/{department}/{type}/v{XXX}/{filename}
+  Work:     {project_root}/{project}/{seq}/{shot}/{department}[/{dcc}]/{filename}
+  Publish:  {publish_root}/{project}/{seq}/{shot}/{department}[/{dcc}]/{type}/v{XXX}/{filename}
 
-Department replaces the ambiguous 'role' field — see publisher.core.constants.
+``department`` is the data axis (it owns the tree and the version counter);
+``dcc`` is the runtime axis and only appears as an **optional inner** segment
+when one department owns several applications (``fx/houdini``, ``comp/nuke``).
+A dcc name must never occupy the department slot — see
+publisher.core.file_system.department_path.
 """
 
 from pathlib import Path
@@ -53,6 +57,7 @@ class PathBuilder:
         publish_type: str,
         version: str,
         filename: str,
+        dcc: Optional[str] = None,
     ) -> Path:
         """
         Build target publish file path.
@@ -62,24 +67,45 @@ class PathBuilder:
             project: Project name
             sequence: Sequence name
             shot: Shot name
-            department: Department/工种
+            department: Department/工种 (e.g., fx, anim, lighting)
             publish_type: Type of publish (script, cache, render)
             version: Version string (e.g., v001, v002)
             filename: Source filename to publish
+            dcc: Optional application token nested inside the department
+                 (e.g. 'houdini'). Only used when one department owns
+                 several applications.
 
         Returns:
-            Path: {publish_root}/{project}/{seq}/{shot}/{department}/{type}/v{XXX}/{filename}
+            Path: {publish_root}/{project}/{seq}/{shot}/{department}[/{dcc}]/{type}/v{XXX}/{filename}
         """
-        return (
-            Path(publish_root)
-            / project
-            / sequence
-            / shot
-            / department
-            / publish_type
-            / version
-            / filename
-        )
+        return PathBuilder.build_publish_version_dir(
+            publish_root, project, sequence, shot, department, publish_type,
+            version, dcc=dcc,
+        ) / filename
+
+    @staticmethod
+    def build_publish_type_dir(
+        publish_root: str,
+        project: str,
+        sequence: str,
+        shot: str,
+        department: str,
+        publish_type: str,
+        dcc: Optional[str] = None,
+    ) -> Path:
+        """
+        Build the publish-type directory that holds the version folders.
+
+        This directory *is* the version counter scope: it is keyed by
+        (department[, dcc], publish type), never shared across departments.
+
+        Returns:
+            Path: {publish_root}/{project}/{seq}/{shot}/{department}[/{dcc}]/{type}
+        """
+        path = Path(publish_root) / project / sequence / shot / department
+        if dcc:
+            path = path / dcc
+        return path / publish_type
 
     @staticmethod
     def build_publish_version_dir(
@@ -90,22 +116,17 @@ class PathBuilder:
         department: str,
         publish_type: str,
         version: str,
+        dcc: Optional[str] = None,
     ) -> Path:
         """
         Build publish version directory path (without filename).
 
         Returns:
-            Path: {publish_root}/{project}/{seq}/{shot}/{department}/{type}/{version}
+            Path: {publish_root}/{project}/{seq}/{shot}/{department}[/{dcc}]/{type}/{version}
         """
-        return (
-            Path(publish_root)
-            / project
-            / sequence
-            / shot
-            / department
-            / publish_type
-            / version
-        )
+        return PathBuilder.build_publish_type_dir(
+            publish_root, project, sequence, shot, department, publish_type, dcc=dcc,
+        ) / version
 
     @staticmethod
     def publish_filename(source_name: str, version: str) -> str:

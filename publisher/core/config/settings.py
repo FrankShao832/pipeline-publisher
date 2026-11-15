@@ -91,7 +91,16 @@ class PublisherConfig:
     project_root: Optional[str] = None
     version_padding: int = 3  # v001, v002, etc.
     max_publish_history: int = 50
-    auto_save_before_publish: bool = True
+    # NOTE: there is deliberately no ``auto_save_before_publish``. A flag for it
+    # existed until 2026-11-08 and nothing ever read it — saving is the DCC
+    # pre-publish hook's job (Houdini ``hou.hipFile.save()``, Maya
+    # ``cmds.file(save=True)``, Nuke ``NukePublisher._nuke_pre_publish``), and
+    # it happens on every publish. A setting that is never consulted is worse
+    # than no setting: it reads as a promise the code does not keep.
+    # Fallback context for a standalone session (no launcher-injected
+    # PIPELINE_* / SHOW / SEQ / SHOT). Env always wins — see
+    # publisher.core.context_resolver.
+    standalone_context: Dict[str, str] = field(default_factory=dict)
 
 
 class ConfigManager:
@@ -202,6 +211,18 @@ class ConfigManager:
             )
         if 'version_padding' in yaml_config:
             config.version_padding = int(yaml_config['version_padding'])
+
+        if 'standalone_context' in yaml_config:
+            static = yaml_config['standalone_context'] or {}
+            if isinstance(static, dict):
+                resolved = {}
+                for key, value in static.items():
+                    if value is None:
+                        continue
+                    resolved[str(key).strip()] = str(value).replace(
+                        '${DEV}', str(platform_dev_root())
+                    ).strip()
+                config.standalone_context = resolved
     
     def _apply_env_overrides(self, config: PublisherConfig):
         """Apply environment variable overrides."""

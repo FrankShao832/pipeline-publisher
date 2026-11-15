@@ -5,11 +5,24 @@
 # 运行模式: false=简单模式(仅文件操作), true=完整模式(含数据库)
 enable_database: true
 
-# 项目根目录（艺术家工作区路径前缀；${DEV} = 数据卷根：darwin → /Volumes/Development，linux → /srv/share/dev）
-project_root: "${DEV}/projects/y_pipeline_projects/Test"
+# 项目根目录 —— show 的上一层，不是某个 show 自己
+# （路径构建器会自己拼 <project>/<sequence>/<shot>，多带一级 show 名就找不到了）
+# ${DEV} = 数据卷根：darwin → /Volumes/Development，linux → /srv/share/dev
+project_root: "${DEV}/projects/y_pipeline_projects"
 
-# 发布根目录（发布目标路径前缀）
-publish_root: "${DEV}/projects/y_pipeline_publish/Test"
+# 发布根目录 —— 同样是 show 的上一层
+publish_root: "${DEV}/projects/y_pipeline_publish"
+
+# 独立启动时的回退上下文
+# 启动器（Pipeline Hatch）注入 PIPELINE_* / SHOW / SEQ / SHOT 时这一块被完全忽略；
+# 只有双击 / python publisher/standalone.py 这种没有环境变量的场合才生效，
+# 否则面板一片 "Not set"，一按发布就报 Missing required context fields。
+standalone_context:
+  project: Rehearsal01
+  sequence: test
+  shot: re_test_001
+  department: fx
+  dcc: houdini
 
 # 版本号位数
 version_padding: 3

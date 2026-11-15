@@ -54,7 +54,7 @@ class DevToolsWidget(QFrame):
         title = QLabel("Development Tools")
         title.setAlignment(Qt.AlignLeft)
         title.setStyleSheet(
-            "font-weight: bold; color: #0078d4; font-size: 20pt;"
+            "font-weight: bold; color: #0078d4; font-size: 20px;"
             "background: transparent; border: none; padding: 2px 0px;"
         )
         layout.addWidget(title)
@@ -100,9 +100,10 @@ class DevToolsWidget(QFrame):
         # Status display bar (moved from LogWidget)
         self.status_display = QLabel("Ready")
         self.status_display.setAlignment(Qt.AlignCenter)
-        self.status_display.setFixedHeight(30)
         self.status_display.setObjectName("status_display")
         self.status_display.setStyleSheet(get_status_style('default'))
+        # No fixed height: the label's QSS padding (6px) plus its own font must
+        # decide the bar height, otherwise a larger font is sliced in half.
         layout.addWidget(self.status_display)
 
         self.setLayout(layout)

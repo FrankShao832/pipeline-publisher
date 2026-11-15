@@ -71,7 +71,10 @@ def launch_nuke(show: bool = True) -> Tuple[None, MainWindow]:
     """
     Launch Publisher for Nuke integration.
 
-    Sets the window title to indicate Nuke mode.
+    Delegates to :class:`publisher.dcc.nuke.publisher.NukePublisher`, which adds
+    the one thing the generic shell cannot know: a pre-publish hook. Without it
+    the publish copies whatever Nuke last wrote to disk — on 2026-11-08 that was
+    a 190-byte template while the session held 2,573 bytes of nodes.
 
     Args:
         show: Whether to show the window immediately
@@ -79,4 +82,6 @@ def launch_nuke(show: bool = True) -> Tuple[None, MainWindow]:
     Returns:
         Tuple of (None, window) - Application is None in DCC mode
     """
-    return _launch_dcc_shell(standalone_mode=False, show=show, title_suffix="Nuke")
+    from publisher.dcc.nuke.publisher import NukePublisher
+
+    return (None, NukePublisher.launch(show=show))

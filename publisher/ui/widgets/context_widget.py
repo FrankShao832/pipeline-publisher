@@ -35,6 +35,9 @@ class ContextWidget(QWidget):
         self.user_role = user_role
         self.is_developer = user_role.lower() in ('admin', 'developer', 'td')
         self.context_data = {}
+        # where the current context came from: env / config / none
+        self.context_source = 'none'
+        self._config = None
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self.update_context)
         self.update_timer.start(10000)
@@ -81,7 +84,7 @@ class ContextWidget(QWidget):
         context_title = QLabel("Context")
         context_title.setStyleSheet("""
             QLabel {
-                font-size: 20pt;
+                font-size: 20px;
                 font-weight: bold;
                 color: #0078d4;
                 background-color: transparent;
@@ -97,7 +100,7 @@ class ContextWidget(QWidget):
         user_label = QLabel(f"User: {self.user_name}  [ {role_display} ]")
         user_label.setStyleSheet("""
             QLabel {
-                font-size: 16pt;
+                font-size: 16px;
                 font-weight: bold;
                 color: #0078d4;
                 background-color: transparent;
@@ -132,7 +135,7 @@ class ContextWidget(QWidget):
             
             /* Form label (left column) - match value label font size */
             QGroupBox QLabel {
-                font-size: 15pt;
+                font-size: 15px;
                 background-color: transparent;
                 border: none;
                 padding: 2px 4px;
@@ -180,7 +183,7 @@ class ContextWidget(QWidget):
         label.setStyleSheet("""
             QLabel {
                 font-weight: normal;
-                font-size: 15pt;
+                font-size: 15px;
                 color: #ffffff;
                 background-color: transparent;
                 border: none;
@@ -192,7 +195,10 @@ class ContextWidget(QWidget):
     def create_status_bar(self) -> QFrame:
         """Create status bar with context validity indicator and individual styling."""
         status_frame = QFrame()
-        status_frame.setFixedHeight(40)
+        # A floor, not a cap: the strip has to be able to grow with its font.
+        # Fixed heights here clipped the text once logical DPI changed (a
+        # 1920x1080 screen reports a different DPI than the Retina panel).
+        status_frame.setMinimumHeight(40)
         status_frame.setStyleSheet("""
             QFrame {
                 background-color: #444444;
@@ -207,23 +213,27 @@ class ContextWidget(QWidget):
         
         # Status indicator with individual styling
         self.status_indicator = QLabel("●")
-        self.status_indicator.setFixedSize(16, 16)
         self.status_indicator.setAlignment(Qt.AlignCenter)
         self.status_indicator.setStyleSheet("""
             QLabel {
-                font-size: 16pt;
+                font-size: 16px;
                 color: #888888;
                 background-color: transparent;
                 border: none;
                 padding: 0px;
             }
         """)
+        # Size the dot from its own glyph instead of a frozen 16x16: the fixed
+        # box cut the glyph in half as soon as the font grew.
+        self.status_indicator.ensurePolished()
+        _dot = max(16, self.status_indicator.sizeHint().height())
+        self.status_indicator.setFixedSize(_dot, _dot)
         
         # Status text with individual styling
         self.status_text = QLabel("Checking context...")
         self.status_text.setStyleSheet("""
             QLabel {
-                font-size: 16pt;
+                font-size: 16px;
                 color: #4caf50;
                 font-weight: bold;
                 background-color: transparent;
@@ -240,24 +250,40 @@ class ContextWidget(QWidget):
         return status_frame
     
     def update_context(self):
-        """Update context information from environment and DCC."""
-        # Get environment variables (PIPELINE_* with legacy SHOW/SEQ/SHOT fallback)
+        """Update context information from environment and DCC.
+
+        A standalone session has no launcher to inject ``PIPELINE_*``
+        variables, so the resolver falls back to
+        ``config/publisher.yaml: standalone_context``. The environment always
+        wins — see :mod:`publisher.core.context_resolver`.
+        """
+        from publisher.core.context_resolver import NOT_SET, resolve_context
+
+        resolved = resolve_context(config=self._load_config())
+        self.context_source = resolved.pop('source', 'none')
+
+        # Outside a DCC the detector reports "Standalone"; the configured
+        # context knows which application the work is meant for, and that is
+        # what provenance should record.
+        dcc = self.detect_dcc()
+        if dcc.strip().lower() in ('', 'standalone', 'unknown') and resolved['dcc'] != NOT_SET:
+            dcc = resolved['dcc']
+
         self.context_data = {
-            'project': os.getenv('PIPELINE_PROJECT',
-                        os.getenv('SHOW', 'Not set')),
-            'sequence': os.getenv('PIPELINE_SEQUENCE',
-                         os.getenv('SEQ', 'Not set')),
-            'shot': os.getenv('PIPELINE_SHOT',
-                     os.getenv('SHOT', 'Not set')),
-            'department': os.getenv('PIPELINE_DEPARTMENT',
-                          os.getenv('ROLE', 'Not set')),
+            'project': resolved['project'],
+            'sequence': resolved['sequence'],
+            'shot': resolved['shot'],
+            'department': resolved['department'],
             'user': self.get_user(),
-            'dcc': self.detect_dcc(),
-            'file_version': self.detect_file_version(),
-            'project_root': os.getenv('PROJECT_ROOT', 'Not set'),
-            'publish_root': os.getenv('PUBLISH_ROOT', 'Not set'),
+            'dcc': dcc,
+            'file_version': 'N/A',
+            'project_root': resolved['project_root'],
+            'publish_root': resolved['publish_root'],
         }
-        
+
+        # Needs the fresh context_data above to resolve the work directory.
+        self.context_data['file_version'] = self.detect_file_version()
+
         # Update UI
         self.update_ui()
         
@@ -266,6 +292,18 @@ class ContextWidget(QWidget):
         
         # Validate context
         self.validate_context()
+
+    def _load_config(self):
+        """Load the publisher config once; failures must never break the UI."""
+        if self._config is not None:
+            return self._config if self._config is not False else None
+        try:
+            from publisher.core.config.settings import ConfigManager
+
+            self._config = ConfigManager().get_config()
+        except Exception:  # noqa: BLE001 - a broken config degrades to env-only
+            self._config = False
+        return self._config if self._config is not False else None
     
     def get_user(self) -> str:
         """Get current username."""
@@ -284,10 +322,11 @@ class ContextWidget(QWidget):
     def detect_file_version(self) -> str:
         """
         Detect file version from source filename in the project workspace.
-        
-        Looks for source files in {project_root}/{project}/{seq}/{shot}/{department}/
-        and extracts version from filename pattern like _v001, _v002, etc.
-        
+
+        Resolves the work directory department-first
+        (``<shot>/<dept>/<dcc>`` -> ``<shot>/<dept>`` -> ``<shot>/<dcc>``) and
+        extracts version from filename pattern like _v001, _v002, etc.
+
         Returns:
             Version string (e.g., 'v001') or 'N/A' if not found.
         """
@@ -295,18 +334,27 @@ class ContextWidget(QWidget):
         sequence = self.context_data.get('sequence', '')
         shot = self.context_data.get('shot', '')
         department = self.context_data.get('department', '')
-        project_root = os.getenv('PROJECT_ROOT', '')
-        
+        project_root = self.context_data.get('project_root', '')
+
+        if project_root == 'Not set':
+            project_root = ''
+
         if not all([project, sequence, shot, department, project_root]):
             return 'N/A'
-        
-        dept_dir = Path(project_root) / project / sequence / shot / department
-        if not dept_dir.exists():
-            return 'N/A'
-        
-        # Determine DCC from department and get extension patterns
+
         from publisher.core.constants import get_dcc_for_department, get_extensions_for_dcc
-        dcc = get_dcc_for_department(department)
+        from publisher.core.file_system.department_path import (
+            normalize_dcc,
+            resolve_source_dir,
+        )
+        dcc = normalize_dcc(self.context_data.get('dcc')) or get_dcc_for_department(department)
+        resolved = resolve_source_dir(
+            project_root, project, sequence, shot, department, dcc,
+        )
+        if resolved is None:
+            return 'N/A'
+        dept_dir = resolved.path
+
         patterns = get_extensions_for_dcc(dcc)
 
         files = []
@@ -354,10 +402,17 @@ class ContextWidget(QWidget):
         
         if not missing_fields:
             # All required fields present
-            self.status_text.setText("✓ Context complete")
+            # "config" = no launcher context, values came from publisher.yaml
+            # (standalone session) — worth saying out loud, otherwise the panel
+            # looks identical to a properly launched one.
+            self.status_text.setText(
+                "✓ Context complete · standalone (config)"
+                if self.context_source == 'config'
+                else "✓ Context complete"
+            )
             self.status_text.setStyleSheet("""
                 QLabel {
-                    font-size: 16pt;
+                    font-size: 16px;
                     color: #4caf50;
                     font-weight: bold;
                     background-color: transparent;
@@ -367,7 +422,7 @@ class ContextWidget(QWidget):
             """)
             self.status_indicator.setStyleSheet("""
                 QLabel {
-                    font-size: 16pt;
+                    font-size: 16px;
                     color: #4caf50;
                     background-color: transparent;
                     border: none;
@@ -380,7 +435,7 @@ class ContextWidget(QWidget):
             self.status_text.setText(f"✗ Missing: {', '.join(missing_fields)}")
             self.status_text.setStyleSheet("""
                 QLabel {
-                    font-size: 16pt;
+                    font-size: 16px;
                     color: #ff9800;
                     font-weight: bold;
                     background-color: transparent;
@@ -390,7 +445,7 @@ class ContextWidget(QWidget):
             """)
             self.status_indicator.setStyleSheet("""
                 QLabel {
-                    font-size: 16pt;
+                    font-size: 16px;
                     color: #ff9800;
                     background-color: transparent;
                     border: none;
