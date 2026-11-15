@@ -88,7 +88,7 @@ publisher/
   dcc/                  houdini/ · maya/ · nuke/   (launcher + pre-publish hook)
   ui/                   main_window · widgets/ · viewmodels
 tests/                  128 tests
-plan/                   working notes and migration records (kept for history)
+plan/                 working notes (local only, not tracked)
 ```
 
 ---
