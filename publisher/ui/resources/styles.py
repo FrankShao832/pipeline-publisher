@@ -16,7 +16,7 @@ QWidget {
 }
 
 QLabel#header_label {
-    font-size: 18pt;
+    font-size: 18px;
     font-weight: bold;
     color: #0078d4;
     padding: 8px;
@@ -25,7 +25,7 @@ QLabel#header_label {
 }
 
 QLabel#footer_label {
-    font-size: 13pt;
+    font-size: 13px;
     color: #666666;
     padding: 8px;
 }
@@ -37,7 +37,7 @@ QPushButton {
     border-radius: 4px;
     padding: 8px 16px;
     font-weight: bold;
-    font-size: 14pt;
+    font-size: 14px;
     min-height: 32px;
 }
 
@@ -76,7 +76,7 @@ QLabel#status_display {
     border: 1px solid #4a4a4a;
     border-radius: 4px;
     padding: 6px;
-    font-size: 14pt;
+    font-size: 14px;
     color: #cccccc;
 }
 
@@ -86,7 +86,7 @@ QTextEdit#log_display {
     border-radius: 4px;
     color: #cccccc;
     font-family: 'Courier New', monospace;
-    font-size: 14pt;
+    font-size: 14px;
     padding: 8px;
 }
 
@@ -95,6 +95,40 @@ QFrame#controls_frame {
     border: 1px solid #444444;
     border-radius: 6px;
     padding: 12px;
+}
+
+/* The content column is taller than a 1920x1080 screen, so the window scrolls
+   instead of being clipped by the display edge (see ui/window_geometry.py).
+   Style the bar to match the dark shell rather than the platform default. */
+QScrollArea {
+    background-color: #1e1e1e;
+    border: none;
+}
+
+QScrollBar:vertical {
+    background-color: #1e1e1e;
+    width: 10px;
+    margin: 0px;
+}
+
+QScrollBar::handle:vertical {
+    background-color: #4a4a4a;
+    border-radius: 5px;
+    min-height: 28px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background-color: #5a5a5a;
+}
+
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+
+QScrollBar::add-page:vertical,
+QScrollBar::sub-page:vertical {
+    background: transparent;
 }
 """
 
@@ -144,7 +178,7 @@ def get_status_style(status_type: str = 'default') -> str:
             border: 1px solid {color};
             border-radius: 4px;
             padding: 6px;
-            font-size: 14pt;
+            font-size: 14px;
             color: {color};
             font-weight: normal;
         }}

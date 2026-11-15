@@ -11,6 +11,7 @@ from pathlib import Path
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QApplication, QLabel,
+    QScrollArea, QFrame,
 )
 from PySide6.QtCore import Qt, Signal, Slot
 
@@ -24,6 +25,7 @@ from publisher.core.file_system.test_env import SANDBOX_SHOW, ensure_test_enviro
 from .utils.ui_utils import center_window_on_screen
 from .utils.source_detector import detect_source_file
 from .resources.styles import MAIN_WINDOW_STYLE
+from .window_geometry import fit_window_to_screen
 
 
 class MainWindow(QMainWindow):
@@ -70,10 +72,24 @@ class MainWindow(QMainWindow):
     # ── Setup Methods ──
 
     def setup_ui(self):
-        """Assemble all widget components into the main layout."""
+        """Assemble all widget components into the main layout.
+
+        The blocks stack to roughly 1225 px of natural minimum height. That is
+        comfortable on a 3008x1692 logical desktop and impossible on 1920x1080
+        (1055 px usable): the window's bottom fell below the screen edge and the
+        edge sliced the last visible row in half — which reads as "the font is
+        cut". The scroll area below lets the window be *shorter* than its
+        content instead of being clipped by the display, at any resolution.
+        """
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
 
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        content = QWidget()
         layout = QVBoxLayout()
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(12)
@@ -115,7 +131,13 @@ class MainWindow(QMainWindow):
         footer.setAlignment(Qt.AlignCenter)
         layout.addWidget(footer)
 
-        central_widget.setLayout(layout)
+        content.setLayout(layout)
+        scroll.setWidget(content)
+
+        outer = QVBoxLayout()
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(scroll)
+        central_widget.setLayout(outer)
 
     def setup_connections(self):
         """Wire signals between components and window properties."""
@@ -134,8 +156,13 @@ class MainWindow(QMainWindow):
 
         # Window properties
         self.setWindowTitle("Y Publisher")
-        self.setMinimumSize(400, 1008)
-        self.resize(500, 1224)
+        # Never open larger than the screen it lands on. The natural height is
+        # ~1225 px, which does not fit 1920x1080 (1055 px usable) — see
+        # window_geometry. Anything that still does not fit scrolls.
+        _avail = QApplication.primaryScreen().availableGeometry()
+        _minimum, _initial = fit_window_to_screen(_avail.width(), _avail.height())
+        self.setMinimumSize(*_minimum)
+        self.resize(*_initial)
         self.setStyleSheet(MAIN_WINDOW_STYLE)
 
         self.log_widget.log_message("Y Publisher started", "info")

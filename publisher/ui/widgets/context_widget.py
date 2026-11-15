@@ -84,7 +84,7 @@ class ContextWidget(QWidget):
         context_title = QLabel("Context")
         context_title.setStyleSheet("""
             QLabel {
-                font-size: 20pt;
+                font-size: 20px;
                 font-weight: bold;
                 color: #0078d4;
                 background-color: transparent;
@@ -100,7 +100,7 @@ class ContextWidget(QWidget):
         user_label = QLabel(f"User: {self.user_name}  [ {role_display} ]")
         user_label.setStyleSheet("""
             QLabel {
-                font-size: 16pt;
+                font-size: 16px;
                 font-weight: bold;
                 color: #0078d4;
                 background-color: transparent;
@@ -135,7 +135,7 @@ class ContextWidget(QWidget):
             
             /* Form label (left column) - match value label font size */
             QGroupBox QLabel {
-                font-size: 15pt;
+                font-size: 15px;
                 background-color: transparent;
                 border: none;
                 padding: 2px 4px;
@@ -183,7 +183,7 @@ class ContextWidget(QWidget):
         label.setStyleSheet("""
             QLabel {
                 font-weight: normal;
-                font-size: 15pt;
+                font-size: 15px;
                 color: #ffffff;
                 background-color: transparent;
                 border: none;
@@ -195,7 +195,10 @@ class ContextWidget(QWidget):
     def create_status_bar(self) -> QFrame:
         """Create status bar with context validity indicator and individual styling."""
         status_frame = QFrame()
-        status_frame.setFixedHeight(40)
+        # A floor, not a cap: the strip has to be able to grow with its font.
+        # Fixed heights here clipped the text once logical DPI changed (a
+        # 1920x1080 screen reports a different DPI than the Retina panel).
+        status_frame.setMinimumHeight(40)
         status_frame.setStyleSheet("""
             QFrame {
                 background-color: #444444;
@@ -210,23 +213,27 @@ class ContextWidget(QWidget):
         
         # Status indicator with individual styling
         self.status_indicator = QLabel("●")
-        self.status_indicator.setFixedSize(16, 16)
         self.status_indicator.setAlignment(Qt.AlignCenter)
         self.status_indicator.setStyleSheet("""
             QLabel {
-                font-size: 16pt;
+                font-size: 16px;
                 color: #888888;
                 background-color: transparent;
                 border: none;
                 padding: 0px;
             }
         """)
+        # Size the dot from its own glyph instead of a frozen 16x16: the fixed
+        # box cut the glyph in half as soon as the font grew.
+        self.status_indicator.ensurePolished()
+        _dot = max(16, self.status_indicator.sizeHint().height())
+        self.status_indicator.setFixedSize(_dot, _dot)
         
         # Status text with individual styling
         self.status_text = QLabel("Checking context...")
         self.status_text.setStyleSheet("""
             QLabel {
-                font-size: 16pt;
+                font-size: 16px;
                 color: #4caf50;
                 font-weight: bold;
                 background-color: transparent;
@@ -405,7 +412,7 @@ class ContextWidget(QWidget):
             )
             self.status_text.setStyleSheet("""
                 QLabel {
-                    font-size: 16pt;
+                    font-size: 16px;
                     color: #4caf50;
                     font-weight: bold;
                     background-color: transparent;
@@ -415,7 +422,7 @@ class ContextWidget(QWidget):
             """)
             self.status_indicator.setStyleSheet("""
                 QLabel {
-                    font-size: 16pt;
+                    font-size: 16px;
                     color: #4caf50;
                     background-color: transparent;
                     border: none;
@@ -428,7 +435,7 @@ class ContextWidget(QWidget):
             self.status_text.setText(f"✗ Missing: {', '.join(missing_fields)}")
             self.status_text.setStyleSheet("""
                 QLabel {
-                    font-size: 16pt;
+                    font-size: 16px;
                     color: #ff9800;
                     font-weight: bold;
                     background-color: transparent;
@@ -438,7 +445,7 @@ class ContextWidget(QWidget):
             """)
             self.status_indicator.setStyleSheet("""
                 QLabel {
-                    font-size: 16pt;
+                    font-size: 16px;
                     color: #ff9800;
                     background-color: transparent;
                     border: none;
