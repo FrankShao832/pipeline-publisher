@@ -71,7 +71,7 @@ class PublisherLauncher(QObject):
         
         app = QApplication(sys.argv)
         app.setApplicationName("Y Publisher")
-        app.setApplicationVersion("2.2.0")
+        app.setApplicationVersion("2.3.0")
         app.setOrganizationName("Frank")
         app.setStyle('Fusion')
         
@@ -86,7 +86,7 @@ class PublisherLauncher(QObject):
     def create_window(self) -> MainWindow:
         """Create main window instance with controller."""
         window = MainWindow(controller=self.controller)
-        window.setWindowTitle("Y Publisher V 2.2.0")
+        window.setWindowTitle("Y Publisher V 2.3.0")
         
         # Connect window ready signal
         if hasattr(window, 'window_ready'):
