@@ -347,3 +347,6 @@ user_settings/
 local_settings/
 # conda temp
 condaenv.*.requirements.txt
+
+# Rehearsal notes stay local, not in the public repo
+plan/demo_rehearsal.md
